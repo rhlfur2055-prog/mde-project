@@ -34,3 +34,22 @@
 - [D8 7-1/7-3] scripts/pacs_scp.py — pynetdicom C-STORE SCP 수신 서버 골격(수신→dicom_io→deid→store, status=received(PACS)). pynetdicom 미설치 시 정직 종료. requirements pynetdicom==3.0.4 추가. 검증: 서버 기동·종료 + 미설치 폴백 2 passed, 전체 60 passed.
 - [D8 7-2] docs/D8_PLAN.md — 아침 체크리스트(수신서버 기동·Orthanc 설치·storescu 전송 시연·보관함 확인·README 업로드vs수신 차이 위치). Orthanc·실전송은 사람이.
 - [7번 D8 준비 완료] push·공개배포·Orthanc 실전송 금지 유지.
+
+## 🌅 야간 실행 최종 요약 (완료 — 사람 확인 대기)
+**전부 완료. 검증 없는 커밋 없음. push/공개배포/실데이터 다운로드/실학습/Orthanc 실전송은 일절 안 함(사람 몫).**
+
+- 최종 테스트: **pytest 60 passed**. 최종 앱 부팅 health 200.
+- 배포 사전점검 통과: .env 미추적(`.env.example`만), 하드코딩 키 0건, requirements 완전, **remote 없음=미push**(로컬 19 커밋).
+- 아레나 풀런 실증: 콜드런 243/700콜·생존10/해고40, 재실행 캐시 0콜, 1등 config_25 채택→보고서 연계. (구별성 전원 0 = 동일케이스 임베딩 군집, 정직 기록)
+
+### 아침에 사람이 할 일 (자동 실행 금지였던 것들)
+1. **git push** — 검토 후 직접. (무인 push 금지였음)
+2. **공개 배포** — Streamlit Cloud 등. DEMO_READONLY=true + GEMINI_API_KEY를 st.secrets로.
+3. **README 아레나 스크린샷** — 라이브 ④에서 캡처(현재는 데이터 표로 대체).
+4. **D7(MURA)** — `docs/D7_PLAN.md`대로: 데이터 신청·다운로드→train_mura→evaluate_mura(영상 아레나)→1등 채택→화면② 한계문구 제거(app.py:134/126/234).
+5. **D8(PACS)** — `docs/D8_PLAN.md`: 수신서버 기동·Orthanc 설치·storescu 전송 시연.
+
+### 알려진 한계/메모
+- 구별성 축이 동일 케이스에서 변별력 약함(전원 0) — D7+ 개선여지.
+- infer 베이스라인은 흉부(도메인 외) — MURA_MODEL 있으면 자동 교체(폴백 구조 완료).
+- python-dotenv는 requirements에 있으나 미사용(report.py 수동 .env 파싱) — 무해.
