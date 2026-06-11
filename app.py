@@ -5,11 +5,16 @@ D1: 화면① 업로드(DICOM 읽기→비식별→비교 표시→보관함 기
 화면 코드만 — 도메인 로직은 core/ 모듈에 위임한다 (spec §2.8, §3).
 """
 import io
+import time
+from pathlib import Path
 
+import cv2
 import streamlit as st
 
-from core import deid, dicom_io
+from core import deid, dicom_io, infer, preprocess
 from core.store import Store
+
+CACHE_DIR = "data/cache"
 
 DISCLAIMER = (
     "본 서비스는 교육·기술 데모입니다. 의료 진단이 아니며, "
@@ -26,6 +31,9 @@ def get_store() -> Store:
 
 def page_upload() -> None:
     st.header("① 업로드 — DICOM 비식별화")
+    st.caption(
+        "ℹ️ 픽셀 글자 블러는 밝기 기반 휴리스틱 — 폰트·대비에 따라 미검출 가능."
+    )
     files = st.file_uploader(
         "X-ray DICOM 파일(.dcm)", type=["dcm"], accept_multiple_files=True
     )
@@ -75,17 +83,93 @@ def page_upload() -> None:
             num_removed_tags=len(removed),
             num_blurred_regions=len(result["blurred_regions"]),
         )
+        # 비식별 이미지를 캐시에 저장 → 화면②가 다시 읽어 분석한다 (PHI 미저장)
+        Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
+        img_path = f"{CACHE_DIR}/study_{rid}.png"
+        cv2.imwrite(img_path, result["pixels"])
+        store.set_image_path(rid, img_path)
         st.success(f"보관함 기록 완료 — studies.id = {rid}")
+
+
+def _render_card(label: str, confidence: float, elapsed_ms: float,
+                 top_finding, cached: bool) -> None:
+    c1, c2, c3 = st.columns(3)
+    c1.metric("판정", label)
+    c2.metric("확신도", f"{confidence * 100:.1f}%")
+    c3.metric("처리 시간", f"{elapsed_ms:.0f} ms")
+    note = "저장된 결과(재추론 없음)" if cached else "신규 추론"
+    if top_finding:
+        st.caption(f"최다 활성 소견(흉부 모델): {top_finding} · {note}")
+    else:
+        st.caption(note)
+
+
+def page_analyze() -> None:
+    st.header("② 분석 — AI 판정")
+    st.warning(
+        "현재 흉부 학습 모델(TorchXRayVision)로 파이프라인 검증 중 — "
+        "근골격 모델(MURA 파인튜닝, D7)로 교체 예정."
+    )
+    store = get_store()
+    studies = store.list_studies()
+    if not studies:
+        st.info("먼저 ① 업로드에서 DICOM을 업로드하세요.")
+        return
+
+    options = {
+        f"#{s['id']} · {s['source_filename']} · {s['modality']}": s["id"]
+        for s in studies
+    }
+    pick = st.selectbox("분석할 항목", list(options.keys()))
+    sid = options[pick]
+    study = store.get_study(sid)
+
+    if st.button("분석 시작", type="primary"):
+        cached = store.get_analysis(sid)
+        if cached is not None:
+            st.success("동일 항목 — 저장된 결과를 즉시 표시합니다 (중복 추론 안 함).")
+            _render_card(cached["label"], cached["confidence"],
+                         cached["elapsed_ms"], cached["top_finding"], cached=True)
+            return
+
+        img_path = study["image_path"] if study else None
+        if not img_path or not Path(img_path).exists():
+            st.error("저장된 비식별 이미지가 없습니다. ①에서 다시 업로드하세요.")
+            return
+
+        with st.status("분석 중...", expanded=True) as status:
+            st.write("① 전처리 (정규화·CLAHE·감마)")
+            img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+            infer.ensure_model()  # 1회 로드 비용을 처리시간에서 제외 (워밍업)
+            t0 = time.perf_counter()
+            pre = preprocess.preprocess(img)
+            st.write("② 추론 (TorchXRayVision)")
+            result = infer.predict(pre)
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            st.write("③ 저장")
+            if result["label"] != infer.LABEL_NO_MODEL:
+                store.add_analysis(sid, result["label"], float(result["confidence"]),
+                                   result.get("top_finding"), elapsed_ms,
+                                   result.get("model", ""))
+                status.update(label="분석 완료", state="complete")
+            else:
+                status.update(label="모델 없음", state="error")
+
+        if result["label"] == infer.LABEL_NO_MODEL:
+            st.error(f"모델을 로드할 수 없습니다: {result.get('error')}")
+        else:
+            _render_card(result["label"], result["confidence"], elapsed_ms,
+                         result.get("top_finding"), cached=False)
 
 
 def page_todo(title: str, step: str) -> None:
     st.header(title)
-    st.info(f"이 화면은 아직 구현 전입니다 ({step}). 현재는 ① 업로드만 동작합니다.")
+    st.info(f"이 화면은 아직 구현 전입니다 ({step}). 현재는 ①·② 만 동작합니다.")
 
 
 PAGES = {
     "① 업로드": page_upload,
-    "② 분석": lambda: page_todo("② 분석", "D2"),
+    "② 분석": page_analyze,
     "③ 보관함": lambda: page_todo("③ 보관함", "D3"),
     "④ 아레나": lambda: page_todo("④ 아레나", "D6"),
 }

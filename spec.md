@@ -9,7 +9,7 @@ X-ray DICOM 파일을 업로드하면 → 개인정보를 비식별화하고 →
 
 ## 2. 하드 제약 (위반 = 실패)
 
-1. **Python 3.12 + Streamlit만.** FastAPI·Flask·Node·별도 프론트엔드 금지.
+1. **Python 3.12 이상(3.13 허용) + Streamlit만.** FastAPI·Flask·Node·별도 프론트엔드 금지.
 2. 외부 API는 **Gemini만** (`.env`의 `GEMINI_API_KEY`). 다른 유료 API 금지.
 3. DB는 **SQLite 파일** (`data/medgate.db`). 외부 DB·서버 금지.
 4. **이 폴더(C:\tool\medgate) 밖을 수정하지 않는다.** 단, 아래 폴더는 **읽기 전용 참고** 허용 (코드 패턴 이식 출처):
@@ -41,6 +41,24 @@ medgate/
 ├── .env.example
 ├── CLAUDE.md / spec.md / plan.md
 ```
+
+## 3.5 이식 지도 — 다른 프로젝트에서 가져올 코드 (구현 전 필독)
+
+아래 출처 파일을 **먼저 읽고**, 코드를 medgate 안으로 **복사해와 다듬어** 쓴다. 출처 폴더는 절대 수정하지 않는다.
+
+| 출처 파일 (읽기 전용) | 가져올 것 | 넣을 곳 | 방법 |
+|---|---|---|---|
+| `C:\tool\plateguard\app\core.py` | 박스 검출→블러(mosaic) 처리 흐름 | `core/deid.py` | 함수 복사 후 수정 — 가리는 대상을 번호판이 아니라 "픽셀에 박힌 글자 영역"으로 |
+| `C:\tool\yolo11\preprocessor.py` | CLAHE·감마·정규화 함수 | `core/preprocess.py` | 필요한 함수만 발췌 복사 (CLAHE는 X-ray 보정 표준 기법) |
+| `C:\tool\yolo11\db.py` | SQLite 캡슐화 클래스 패턴 | `core/store.py` | 패턴만 모방, 스키마는 spec §3대로 새로 |
+| `C:\tool\yolo11\tests\` + `test_ocr_accuracy.py` | 스모크+회귀 테스트 구조, 실패 시 exit 1 게이팅 | `tests/` | 구조만 모방 |
+| `C:\tool\plateguard\scripts\_bench.py` | 단계별 처리시간 실측 방식 | `scripts/bench.py` | 패턴 모방 |
+
+**이식 규칙:**
+1. **모델 가중치 복사 절대 금지**: `best.pt`(번호판 검출), `plate_ocr_crnn.pth`(번호판 글자) — 번호판용으로 학습된 모델이라 X-ray에 무용하다. X-ray 판정 모델은 spec §7 D2에서 별도 결정.
+2. 픽셀 내 글자 검출 — **v1은 경량 CV 휴리스틱 허용** (D1에서 감리 승인됨: 밝기+가로라인 기반, 배포 용량 때문에 PaddleOCR 대신). 단 **화면①에 한계 1줄 명시 의무**: "픽셀 글자 블러는 밝기 기반 휴리스틱 — 폰트·대비에 따라 미검출 가능". PaddleOCR 업그레이드는 D7 선택 과제.
+3. 출처 프로젝트를 import 하거나 `sys.path`에 추가하지 않는다 — 코드를 가져와 medgate 안에서 독립시킨다.
+4. 가져온 코드 상단에 출처 주석 1줄: `# 이식: plateguard app/core.py 의 mosaic() 패턴`
 
 ## 4. 화면별 명세 + 완료 기준(AC)
 
@@ -85,6 +103,7 @@ medgate/
 | **D4** | `report.py` + 게이트 + 테스트 보강 | ③AC (게이트 차단·재시도 로그) + 게이트 단위테스트 |
 | **D5** | README(스크린샷·실측 수치·"번호판→X-ray 개조" 스토리) + 배포 준비 | `streamlit run app.py` 클린 실행, README 완성 |
 | **D6** | `arena.py` + `benchmark_cases.json`(첫 작업) + 화면④ | ④AC 전부 |
+| **D7** (예약) | `infer.py` 모델을 MURA DenseNet169 파인튜닝(근골격 정상/이상)으로 교체 — D2의 TorchXRayVision(흉부) 베이스라인 대체 | MURA 학습 가중치로 근골격 X-ray 판정, 화면② 도메인 한계 문구 제거 |
 
 ## 8. 작업 규칙 (하네스 — 매 응답에 적용)
 

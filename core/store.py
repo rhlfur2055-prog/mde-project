@@ -34,12 +34,37 @@ class Store:
                 body_part TEXT,
                 num_removed_tags INTEGER DEFAULT 0,
                 num_blurred_regions INTEGER DEFAULT 0,
+                image_path TEXT,
                 status TEXT DEFAULT 'uploaded',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+        # analyses: 화면② 결과 캐시 (study당 1건 — 재분석 시 즉시 반환, ②AC)
+        self.conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS analyses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                study_id INTEGER UNIQUE NOT NULL,
+                label TEXT,
+                confidence REAL,
+                top_finding TEXT,
+                elapsed_ms REAL,
+                model TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (study_id) REFERENCES studies(id)
+            )
+            """
+        )
         self.conn.commit()
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """기존 D1 DB(image_path 없음)에 컬럼을 방어적으로 추가."""
+        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(studies)")]
+        if "image_path" not in cols:
+            self.conn.execute("ALTER TABLE studies ADD COLUMN image_path TEXT")
+            self.conn.commit()
 
     def add_study(
         self,
@@ -66,11 +91,53 @@ class Store:
         self.conn.commit()
         return int(cur.lastrowid)
 
+    def set_image_path(self, study_id: int, image_path: str) -> None:
+        """업로드 시 저장한 비식별 이미지 경로를 study에 기록 (화면②가 다시 읽음)."""
+        self.conn.execute(
+            "UPDATE studies SET image_path = ? WHERE id = ?", (image_path, study_id)
+        )
+        self.conn.commit()
+
+    def get_study(self, study_id: int) -> Optional[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM studies WHERE id = ?", (study_id,)
+        ).fetchone()
+
     def list_studies(self, limit: int = 100) -> list[sqlite3.Row]:
         return self.conn.execute(
             "SELECT * FROM studies ORDER BY created_at DESC, id DESC LIMIT ?",
             (limit,),
         ).fetchall()
+
+    def add_analysis(
+        self,
+        study_id: int,
+        label: str,
+        confidence: float,
+        top_finding: Optional[str],
+        elapsed_ms: float,
+        model: str,
+    ) -> int:
+        """분석 결과를 캐시한다 (study당 1건 — 재실행 시 덮어쓰기)."""
+        cur = self.conn.execute(
+            """
+            INSERT INTO analyses (study_id, label, confidence, top_finding, elapsed_ms, model)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(study_id) DO UPDATE SET
+                label=excluded.label, confidence=excluded.confidence,
+                top_finding=excluded.top_finding, elapsed_ms=excluded.elapsed_ms,
+                model=excluded.model, created_at=CURRENT_TIMESTAMP
+            """,
+            (study_id, label, confidence, top_finding, elapsed_ms, model),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def get_analysis(self, study_id: int) -> Optional[sqlite3.Row]:
+        """캐시된 분석 결과 (없으면 None) — 화면②의 '재분석 즉시 표시'에 사용."""
+        return self.conn.execute(
+            "SELECT * FROM analyses WHERE study_id = ?", (study_id,)
+        ).fetchone()
 
     def close(self) -> None:
         self.conn.close()

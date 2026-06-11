@@ -3,3 +3,7 @@ numpy>=1.26           # 픽셀 배열 처리
 opencv-python>=4.9    # 픽셀 내 글자영역 검출·블러 (plateguard core.py 패턴 이식)
 streamlit>=1.40       # 화면① 업로드 UI (단일 앱)
 pytest>=8.0           # core 모듈 단위 테스트
+torch>=2.2            # TorchXRayVision 추론 백엔드 (CPU 휠 권장)
+torchvision>=0.17     # xrv 이미지 변환 (XRayCenterCrop/XRayResizer)
+torchxrayvision>=1.2  # D2 베이스라인 — 흉부 X-ray 사전학습 분류기 (근골격은 D7 MURA 교체)
+
