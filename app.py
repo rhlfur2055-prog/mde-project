@@ -13,7 +13,7 @@ from pathlib import Path
 import cv2
 import streamlit as st
 
-from core import arena, deid, dicom_io, infer, preprocess, report
+from core import arena, config, deid, dicom_io, infer, preprocess, report
 from core.store import Store
 
 CACHE_DIR = "data/cache"
@@ -48,6 +48,9 @@ def get_store() -> Store:
 
 def page_upload() -> None:
     st.header("① 업로드 — DICOM 비식별화")
+    if config.readonly():
+        st.info("🔒 데모 읽기 전용 — 업로드(쓰기)가 잠겨 있습니다. ②③④에서 미리 만든 결과를 열람하세요.")
+        return
     st.caption(
         "ℹ️ 픽셀 글자 블러는 밝기 기반 휴리스틱 — 폰트·대비에 따라 미검출 가능."
     )
@@ -145,7 +148,19 @@ def page_analyze() -> None:
     sid = options[pick]
     study = store.get_study(sid)
 
-    if st.button("분석 시작", type="primary"):
+    ro = config.readonly()
+    run = st.button("분석 시작", type="primary", disabled=ro)
+    if ro:
+        cached = store.get_analysis(sid)
+        if cached is not None:
+            st.success("🔒 읽기 전용 — 저장된 분석 결과")
+            _render_card(cached["label"], cached["confidence"],
+                         cached["elapsed_ms"], cached["top_finding"], cached=True)
+        else:
+            st.info("🔒 읽기 전용 — 분석 실행(추론) 잠금. 저장된 결과 없음.")
+        return
+
+    if run:
         cached = store.get_analysis(sid)
         if cached is not None:
             st.success("동일 항목 — 저장된 결과를 즉시 표시합니다 (중복 추론 안 함).")
@@ -226,7 +241,17 @@ def _render_report_section(sid: int, d) -> None:
     st.markdown("**보고서 초안 (품질 게이트 통과본만 표시)**")
     cache_path = f"{CACHE_DIR}/report_{sid}.json"
 
-    if st.button("보고서 초안 생성", key=f"report_{sid}"):
+    ro = config.readonly()
+    gen = st.button("보고서 초안 생성", key=f"report_{sid}", disabled=ro)
+    if ro:
+        if Path(cache_path).exists():
+            st.caption("🔒 읽기 전용 — 캐시된 보고서")
+            _show_report(json.loads(Path(cache_path).read_text(encoding="utf-8")))
+        else:
+            st.info("🔒 읽기 전용 — 보고서 생성(Gemini) 잠금. 캐시 없음.")
+        return
+
+    if gen:
         if Path(cache_path).exists():  # 같은 study 재생성 → 캐시 사용 (LLM 재호출 없음)
             rep = json.loads(Path(cache_path).read_text(encoding="utf-8"))
             st.caption("캐시된 보고서 사용 (Gemini 재호출 없음)")
@@ -300,7 +325,10 @@ def page_arena() -> None:
     if adopted:
         st.info(f"현재 채택된 운영 구성: **{adopted['config']['id']}** — {adopted['instruction']}")
 
-    if st.button("아레나 실행", type="primary"):
+    ro = config.readonly()
+    if ro:
+        st.info("🔒 데모 읽기 전용 — 아레나 실행(Gemini)이 잠겨 있습니다. 저장된 리더보드만 열람하세요.")
+    if st.button("아레나 실행", type="primary", disabled=ro):
         with st.status("아레나 실행 중... (구성 50개 생성·채점·쌍대결 — 수 분 소요)",
                        expanded=True) as status:
             try:
@@ -348,7 +376,7 @@ def page_arena() -> None:
         st.divider()
         w = lb["winner"]
         st.markdown(f"**1등: {w['id']}** — {arena.config_instruction(w['config'])}")
-        if st.button("1등 채택 (운영 프롬프트로 저장)"):
+        if st.button("1등 채택 (운영 프롬프트로 저장)", disabled=ro):
             arena.adopt_config(w["config"])
             st.success(f"{w['id']} 채택됨 — 이후 ③ 보고서 초안이 이 구성으로 생성됩니다.")
             st.rerun()
@@ -369,6 +397,8 @@ PAGES = {
 
 def main() -> None:
     st.sidebar.title("MedGate")
+    if config.readonly():
+        st.sidebar.warning("🔒 데모 읽기 전용 모드 — Gemini·추론 실행 잠금")
     choice = st.sidebar.radio("화면", list(PAGES.keys()))
     PAGES[choice]()
     st.divider()
