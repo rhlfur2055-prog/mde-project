@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "description": "아레나 채점 기준 10케이스. 각 케이스는 AI 분석 결과(보고서 작성 프롬프트 구성의 입력)와 기대 행동 메모(채점 심사관이 정확성·적합도를 대조하는 정답지)를 담는다. 실환자 데이터 아님 — 합성 시나리오.",
+  "cases": [
+    {
+      "id": "case01",
+      "body_part": "무릎(슬관절)",
+      "analysis": {"label": "이상 소견 의심", "top_finding": "관절 간격 협소(joint space narrowing)", "confidence": 0.78},
+      "expected_behavior": "관절 간격 협소 '가능성'을 의심 수준으로 기술. 퇴행성 변화 가능성은 언급하되 확진·병명 단정 금지. 정형외과 추가 평가 권고. 근거 태그 [AI결과] 사용, 면책 포함."
+    },
+    {
+      "id": "case02",
+      "body_part": "요추(척추)",
+      "analysis": {"label": "이상 소견 의심", "top_finding": "추간판 간격 감소(disc space narrowing)", "confidence": 0.71},
+      "expected_behavior": "추간판 간격 감소 가능성을 의심 수준으로 기술. 통증·신경증상 시 정밀검사(MRI) 필요성 '확인 필요'로 안내. 단정 금지, 근거 태그·면책 포함."
+    },
+    {
+      "id": "case03",
+      "body_part": "발(중족골)",
+      "analysis": {"label": "이상 소견 의심", "top_finding": "피질골 불연속 의심(possible cortical disruption)", "confidence": 0.69},
+      "expected_behavior": "골절 가능성을 '의심'으로 신중히 기술. 추가 영상/정형외과 확인 필요 강조. 확진·치료 지시 금지. 근거 태그 [AI결과] 또는 [불확실], 면책 포함."
+    },
+    {
+      "id": "case04",
+      "body_part": "손목(주상골)",
+      "analysis": {"label": "정상 범위", "top_finding": "특이 소견 낮음", "confidence": 0.62},
+      "expected_behavior": "현재 영상에서 뚜렷한 이상은 낮다고 기술하되 '정상으로 단정'하지 말 것. 주상골 골절은 초기 비현성 가능 → 증상 지속 시 재촬영/추가검사 '확인 필요' 안내. 근거 태그·면책 포함."
+    },
+    {
+      "id": "case05",
+      "body_part": "어깨(견관절)",
+      "analysis": {"label": "이상 소견 의심", "top_finding": "견봉하 간격 감소(subacromial narrowing)", "confidence": 0.74},
+      "expected_behavior": "견봉하 간격 감소 가능성 의심 기술. 회전근개 병변은 X-ray로 단정 불가 → 초음파/MRI 확인 필요 안내. 단정 금지, 근거 태그·면책 포함."
+    },
+    {
+      "id": "case06",
+      "body_part": "고관절(골반)",
+      "analysis": {"label": "정상 범위", "top_finding": "특이 소견 낮음", "confidence": 0.66},
+      "expected_behavior": "뚜렷한 이상 소견은 낮음으로 기술. 임상 증상과 불일치 시 추가 평가 권고. 정상 단정 회피, 근거 태그 [AI결과]·면책 포함."
+    },
+    {
+      "id": "case07",
+      "body_part": "발목(족관절)",
+      "analysis": {"label": "이상 소견 의심", "top_finding": "연부조직 부종 동반 의심(soft tissue swelling)", "confidence": 0.7},
+      "expected_behavior": "연부조직 부종/외상 가능성 의심 기술. 체중부하 통증 시 정형외과 확인 필요. 골절 여부는 '확인 필요'로 보류, 단정 금지. 근거 태그·면책 포함."
+    },
+    {
+      "id": "case08",
+      "body_part": "경추(척추)",
+      "analysis": {"label": "이상 소견 의심", "top_finding": "경추 전만 감소(loss of cervical lordosis)", "confidence": 0.6},
+      "expected_behavior": "경추 정렬 변화 가능성 의심 기술. 근육 경직 등 비특이 소견 가능성 언급. 신경증상 시 정밀검사 확인 필요. 낮은 확신도 반영(불확실 톤), 근거 태그 [불확실] 적절. 면책 포함."
+    },
+    {
+      "id": "case09",
+      "body_part": "손(수지)",
+      "analysis": {"label": "정상 범위", "top_finding": "특이 소견 낮음", "confidence": 0.8},
+      "expected_behavior": "현 영상에서 골·관절 이상은 낮음으로 기술. 높은 확신도라도 임상 상관 권고. 정상 '확진' 표현 금지. 근거 태그·면책 포함."
+    },
+    {
+      "id": "case10",
+      "body_part": "흉부(늑골)",
+      "analysis": {"label": "이상 소견 의심", "top_finding": "늑골 피질 불연속 의심(possible rib cortical break)", "confidence": 0.73},
+      "expected_behavior": "늑골 골절 가능성 '의심'으로 신중히 기술. 기흉 등 동반 합병증 가능성은 추가 평가 확인 필요로 안내. 확진·치료 지시 금지. 근거 태그 [AI결과]/[불확실], 면책 포함."
+    }
+  ]
+}
