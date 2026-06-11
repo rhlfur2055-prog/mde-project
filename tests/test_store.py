@@ -66,7 +66,7 @@ def test_analysis_cache_upsert(tmp_path):
 
 
 def test_migration_adds_image_path_to_legacy_db(tmp_path):
-    """image_path 없는 구(舊) studies 테이블에 마이그레이션이 컬럼을 추가한다."""
+    """image_path·removed_tags 없는 구(舊) studies 테이블에 마이그레이션이 컬럼을 추가한다."""
     import sqlite3
     db = str(tmp_path / "legacy.db")
     conn = sqlite3.connect(db)
@@ -77,7 +77,50 @@ def test_migration_adds_image_path_to_legacy_db(tmp_path):
     conn.commit()
     conn.close()
 
-    store = Store(db)  # _migrate가 image_path 추가해야 함
+    store = Store(db)  # _migrate가 image_path·removed_tags 추가해야 함
     cols = [r[1] for r in store.conn.execute("PRAGMA table_info(studies)")]
     assert "image_path" in cols
+    assert "removed_tags" in cols
+    store.close()
+
+
+def test_removed_tags_json_roundtrip(tmp_path):
+    import json
+    store = Store(str(tmp_path / "t.db"))
+    tags = [{"tag": "(0010,0010)", "keyword": "PatientName", "action": "치환",
+             "old": "CompressedSamples^CT1", "new": "ANON-1"}]
+    sid = store.add_study(anon_patient_id="ANON-1", source_filename="x.dcm",
+                          num_removed_tags=1, removed_tags=json.dumps(tags, ensure_ascii=False))
+    d = store.get_study_detail(sid)
+    parsed = json.loads(d["removed_tags"])
+    assert parsed[0]["keyword"] == "PatientName"
+    assert parsed[0]["action"] == "치환"
+    store.close()
+
+
+def test_list_with_verdict_marks_unanalyzed(tmp_path):
+    """분석된 study는 verdict 라벨, 미분석 study는 verdict=None."""
+    store = Store(str(tmp_path / "t.db"))
+    s1 = store.add_study(anon_patient_id="A1", source_filename="a.dcm", modality="CT")
+    s2 = store.add_study(anon_patient_id="A2", source_filename="b.dcm", modality="MR")
+    store.add_analysis(s1, "정상 범위", 0.7, "Effusion", 40.0, "m")
+
+    rows = {r["id"]: r for r in store.list_studies_with_verdict()}
+    assert rows[s1]["verdict"] == "정상 범위"
+    assert rows[s2]["verdict"] is None      # 미분석
+    store.close()
+
+
+def test_get_study_detail_joins_analysis(tmp_path):
+    store = Store(str(tmp_path / "t.db"))
+    sid = store.add_study(anon_patient_id="A1", source_filename="a.dcm", body_part="KNEE")
+    store.add_analysis(sid, "이상 소견 의심", 0.83, "Lung Opacity", 41.6, "densenet121-res224-all")
+    d = store.get_study_detail(sid)
+    assert d["body_part"] == "KNEE"
+    assert d["verdict_label"] == "이상 소견 의심"
+    assert abs(d["verdict_conf"] - 0.83) < 1e-6
+    assert d["verdict_top"] == "Lung Opacity"
+    # 미분석 항목은 verdict_label이 None
+    sid2 = store.add_study(anon_patient_id="A2", source_filename="b.dcm")
+    assert store.get_study_detail(sid2)["verdict_label"] is None
     store.close()

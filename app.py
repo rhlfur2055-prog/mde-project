@@ -5,6 +5,7 @@ D1: 화면① 업로드(DICOM 읽기→비식별→비교 표시→보관함 기
 화면 코드만 — 도메인 로직은 core/ 모듈에 위임한다 (spec §2.8, §3).
 """
 import io
+import json
 import time
 from pathlib import Path
 
@@ -82,6 +83,7 @@ def page_upload() -> None:
             body_part=meta.get("BodyPartExamined", ""),
             num_removed_tags=len(removed),
             num_blurred_regions=len(result["blurred_regions"]),
+            removed_tags=json.dumps(removed, ensure_ascii=False),
         )
         # 비식별 이미지를 캐시에 저장 → 화면②가 다시 읽어 분석한다 (PHI 미저장)
         Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
@@ -162,15 +164,78 @@ def page_analyze() -> None:
                          result.get("top_finding"), cached=False)
 
 
+def _render_detail(store: Store, sid: int) -> None:
+    d = store.get_study_detail(sid)
+    if d is None:
+        st.error("항목을 찾을 수 없습니다.")
+        return
+    st.subheader(f"상세 — #{sid} · {d['source_filename']}")
+
+    col_img, col_meta = st.columns([1, 1])
+    with col_img:
+        st.caption("비식별 이미지")
+        if d["image_path"] and Path(d["image_path"]).exists():
+            st.image(d["image_path"], use_container_width=True)
+        else:
+            st.info("저장된 비식별 이미지가 없습니다.")
+    with col_meta:
+        st.caption(f"부위: {d['body_part'] or '-'} · 모달리티: {d['modality'] or '-'} · 상태: {d['status']}")
+        tags = json.loads(d["removed_tags"] or "[]")
+        st.markdown(f"**제거/치환된 식별 태그: {len(tags)}개**")
+        if tags:
+            st.dataframe(
+                [{"태그": t["tag"], "항목": t["keyword"], "조치": t["action"],
+                  "원본값": t["old"], "치환값": t["new"]} for t in tags],
+                use_container_width=True, hide_index=True,
+            )
+
+    st.markdown("**분석 결과**")
+    if d["verdict_label"]:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("판정", d["verdict_label"])
+        c2.metric("확신도", f"{(d['verdict_conf'] or 0) * 100:.1f}%")
+        c3.metric("처리 시간", f"{d['verdict_ms'] or 0:.0f} ms")
+        if d["verdict_top"]:
+            st.caption(f"최다 활성 소견(흉부 모델): {d['verdict_top']} · 모델 {d['verdict_model']}")
+    else:
+        st.info("미분석 — ② 분석에서 [분석 시작]을 실행하세요.")
+
+
+def page_archive() -> None:
+    st.header("③ 보관함 — 목록 / 상세")
+    store = get_store()
+    rows = store.list_studies_with_verdict()
+    if not rows:
+        st.info("먼저 ① 업로드에서 DICOM을 업로드하세요.")
+        return
+
+    table = [
+        {"ID": r["id"], "비식별ID": r["anon_patient_id"], "일시": r["created_at"],
+         "부위": r["body_part"] or "-", "상태": r["status"],
+         "판정": r["verdict"] or "미분석"}
+        for r in rows
+    ]
+    event = st.dataframe(
+        table, use_container_width=True, hide_index=True,
+        on_select="rerun", selection_mode="single-row",
+    )
+    selected = event.selection.rows if event and event.selection else []
+    if selected:
+        st.divider()
+        _render_detail(store, table[selected[0]]["ID"])
+    else:
+        st.caption("↑ 행을 선택하면 상세가 표시됩니다.")
+
+
 def page_todo(title: str, step: str) -> None:
     st.header(title)
-    st.info(f"이 화면은 아직 구현 전입니다 ({step}). 현재는 ①·② 만 동작합니다.")
+    st.info(f"이 화면은 아직 구현 전입니다 ({step}). 현재는 ①·②·③ 만 동작합니다.")
 
 
 PAGES = {
     "① 업로드": page_upload,
     "② 분석": page_analyze,
-    "③ 보관함": lambda: page_todo("③ 보관함", "D3"),
+    "③ 보관함": page_archive,
     "④ 아레나": lambda: page_todo("④ 아레나", "D6"),
 }
 

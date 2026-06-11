@@ -34,6 +34,7 @@ class Store:
                 body_part TEXT,
                 num_removed_tags INTEGER DEFAULT 0,
                 num_blurred_regions INTEGER DEFAULT 0,
+                removed_tags TEXT DEFAULT '[]',
                 image_path TEXT,
                 status TEXT DEFAULT 'uploaded',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -60,11 +61,13 @@ class Store:
         self._migrate()
 
     def _migrate(self) -> None:
-        """기존 D1 DB(image_path 없음)에 컬럼을 방어적으로 추가."""
+        """기존 DB에 신규 컬럼을 방어적으로 추가 (스키마 내 확장)."""
         cols = [r[1] for r in self.conn.execute("PRAGMA table_info(studies)")]
         if "image_path" not in cols:
             self.conn.execute("ALTER TABLE studies ADD COLUMN image_path TEXT")
-            self.conn.commit()
+        if "removed_tags" not in cols:
+            self.conn.execute("ALTER TABLE studies ADD COLUMN removed_tags TEXT DEFAULT '[]'")
+        self.conn.commit()
 
     def add_study(
         self,
@@ -75,18 +78,19 @@ class Store:
         body_part: str = "",
         num_removed_tags: int = 0,
         num_blurred_regions: int = 0,
+        removed_tags: str = "[]",
         status: str = "uploaded",
     ) -> int:
-        """studies에 1행 INSERT하고 새 id를 반환한다."""
+        """studies에 1행 INSERT하고 새 id를 반환한다. removed_tags는 JSON 문자열."""
         cur = self.conn.execute(
             """
             INSERT INTO studies
             (anon_patient_id, source_filename, modality, body_part,
-             num_removed_tags, num_blurred_regions, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+             num_removed_tags, num_blurred_regions, removed_tags, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (anon_patient_id, source_filename, modality, body_part,
-             num_removed_tags, num_blurred_regions, status),
+             num_removed_tags, num_blurred_regions, removed_tags, status),
         )
         self.conn.commit()
         return int(cur.lastrowid)
@@ -108,6 +112,34 @@ class Store:
             "SELECT * FROM studies ORDER BY created_at DESC, id DESC LIMIT ?",
             (limit,),
         ).fetchall()
+
+    def list_studies_with_verdict(self, limit: int = 100) -> list[sqlite3.Row]:
+        """화면③ 목록용 — studies LEFT JOIN analyses. verdict가 NULL이면 미분석."""
+        return self.conn.execute(
+            """
+            SELECT s.id, s.anon_patient_id, s.created_at, s.body_part,
+                   s.modality, s.status, a.label AS verdict
+            FROM studies s
+            LEFT JOIN analyses a ON a.study_id = s.id
+            ORDER BY s.created_at DESC, s.id DESC LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    def get_study_detail(self, study_id: int) -> Optional[sqlite3.Row]:
+        """화면③ 상세용 — studies(removed_tags 포함) LEFT JOIN analyses 단일 행."""
+        return self.conn.execute(
+            """
+            SELECT s.*,
+                   a.label AS verdict_label, a.confidence AS verdict_conf,
+                   a.top_finding AS verdict_top, a.elapsed_ms AS verdict_ms,
+                   a.model AS verdict_model
+            FROM studies s
+            LEFT JOIN analyses a ON a.study_id = s.id
+            WHERE s.id = ?
+            """,
+            (study_id,),
+        ).fetchone()
 
     def add_analysis(
         self,
