@@ -18,6 +18,10 @@ data/mura/
 data/medgate.db
 data/cache/
 
+# 아레나 런타임 산출물 (재현 가능)
+data/arena_leaderboard.json
+data/arena_adopted.json
+
 # 산출물
 outputs/
 *.log
