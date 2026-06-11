@@ -1,11 +1,13 @@
-pydicom>=3.0          # DICOM 파일 읽기·식별 태그 조작
-numpy>=1.26           # 픽셀 배열 처리
-opencv-python>=4.9    # 픽셀 내 글자영역 검출·블러 (plateguard core.py 패턴 이식)
-streamlit>=1.40       # 화면① 업로드 UI (단일 앱)
-pytest>=8.0           # core 모듈 단위 테스트
-torch>=2.2            # TorchXRayVision 추론 백엔드 (CPU 휠 권장)
-torchvision>=0.17     # xrv 이미지 변환 (XRayCenterCrop/XRayResizer)
-torchxrayvision>=1.2  # D2 베이스라인 — 흉부 X-ray 사전학습 분류기 (근골격은 D7 MURA 교체)
-google-genai>=1.0     # 보고서 초안 생성용 Gemini 클라이언트 (spec §4 — 외부 API는 Gemini만)
-python-dotenv>=1.0    # .env에서 GEMINI_API_KEY 로드
+# 배포(Streamlit Community Cloud, linux)에서 torch CPU 휠을 받도록 — GPU 빌드(수 GB) 회피
+--extra-index-url https://download.pytorch.org/whl/cpu
 
+pydicom==3.0.2                     # DICOM 파일 읽기·식별 태그 조작
+numpy==2.4.6                       # 픽셀 배열 처리
+opencv-python-headless==4.13.0.92  # 픽셀 글자영역 검출·블러 (배포용 headless — GUI 라이브러리 의존 없음)
+streamlit==1.58.0                  # 4페이지 단일 앱
+pytest==9.0.3                      # core 모듈 단위 테스트
+torch==2.12.0                      # TorchXRayVision 추론 백엔드 (CPU 휠 — 위 extra-index)
+torchvision==0.27.0                # xrv 이미지 변환 (XRayCenterCrop/XRayResizer)
+torchxrayvision==1.4.0             # D2 베이스라인 흉부 분류기 (근골격은 D7 MURA 교체)
+google-genai==2.8.0                # 보고서·아레나 Gemini 클라이언트 (외부 API는 Gemini만)
+python-dotenv==1.2.2               # .env 로드 (로컬)
