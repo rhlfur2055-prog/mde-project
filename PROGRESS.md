@@ -24,4 +24,5 @@
   - **과적합 점검**: 생존10 합성 76.4~79.8(상하 3.4점차)로 빡빡한 군집, 정확성은 10케이스 평균이라 단일케이스 과적합 아님. 1등 13승으로 명확한 우위 — 합리적.
   - **구별성 작동**: 생존10 전원 구별성=0.0 ⚠️ — 같은 10케이스 보고서 임베딩이 코사인≥0.85로 군집해 구별성 축(20%)이 전원 0점. 즉 선발은 사실상 정확성·적합도·근거+쌍대결로 결정됨. 구성 자체는 역할(영상의학/교육/환자설명/간결메모)·구조 다양해 완전 동일은 아니나, **임베딩 구별성 지표가 동일 케이스 텍스트에선 변별력 약함**. 개선여지: 케이스별 분산 임베딩 또는 스타일 전용 임베딩(D7+ 검토).
 - [D5-1 보강] `840cc5e` 후속 — README 아레나 실측 채움: 243콜/생존10/해고40/재실행0콜 + 생존 리더보드 표(1등 config_25) + 구별성=0 주의. **스크린샷 이미지는 표로 대체**(라이브 캡처는 헤드리스 무인에서 비효율 → 아침에 사람이 ④에서 캡처, README에 표시). 데이터는 커밋된 풀런 로그와 일치.
-- [D5-2] DEMO_READONLY 안전장치. core/config.py(순수 readonly 플래그) + app.py 전 페이지 버튼 disabled+잠금안내(업로드/분석/보고서/아레나 실행/1등 채택) + 사이드바 배너. 검증: AppTest로 readonly 시 아레나/채택 버튼 disabled·잠금안내 노출, 비-readonly 시 활성 — 3 passed. 전체 51 passed. DEMO_READONLY=true 헤드리스 부팅 health 200.
+- [D5-2] `6370424` DEMO_READONLY 안전장치.
+- [5번 배포 사전점검] **통과** — (1) .env 미추적(추적 env는 .env.example만), (2) 하드코딩 키 grep 0건, (3) 서드파티 import(cv2/google/numpy/pydicom/pytest/streamlit/torch/torchvision/torchxrayvision) 전부 requirements 포함. 참고: python-dotenv는 목록에 있으나 현재 미사용(report.py가 BOM 안전 위해 .env 수동 파싱) — 무해, 유지. ★ push·공개배포는 사람이 아침에. core/config.py(순수 readonly 플래그) + app.py 전 페이지 버튼 disabled+잠금안내(업로드/분석/보고서/아레나 실행/1등 채택) + 사이드바 배너. 검증: AppTest로 readonly 시 아레나/채택 버튼 disabled·잠금안내 노출, 비-readonly 시 활성 — 3 passed. 전체 51 passed. DEMO_READONLY=true 헤드리스 부팅 health 200.
