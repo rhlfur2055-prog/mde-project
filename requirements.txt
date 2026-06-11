@@ -11,3 +11,4 @@ torchvision==0.27.0                # xrv 이미지 변환 (XRayCenterCrop/XRayRe
 torchxrayvision==1.4.0             # D2 베이스라인 흉부 분류기 (근골격은 D7 MURA 교체)
 google-genai==2.8.0                # 보고서·아레나 Gemini 클라이언트 (외부 API는 Gemini만)
 python-dotenv==1.2.2               # .env 로드 (로컬)
+pynetdicom==3.0.4                  # D8 PACS C-STORE 수신 서버 (DICOM 네트워크 수신)

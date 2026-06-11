@@ -31,3 +31,6 @@
 - [D7 6-3] core/infer.py MURA 로더+폴백 — MURA_MODEL(.pt) 있으면 DenseNet169 2-class 근골격 추론, 없으면 흉부 베이스라인 폴백. predict 인터페이스 불변. 검증: 폴백·MURA채택 2 passed, 전체 57 passed.
 - [D7 6-5] scripts/evaluate_mura.py — "영상 아레나": .pt 모델들을 MURA 정답으로 채점→정확도/민감도/특이도 리더보드(정확도순)→1등 채택 후보. 검증: 더미 모델 2·이미지 4로 리더보드 파이프라인 1 passed.
 - [D7 6-4/6-6] docs/D7_PLAN.md — 아침 실행 체크리스트(MURA 신청 URL·다운로드·라벨 CSV 교차검증·학습·영상아레나 평가·1등 채택·화면② 한계문구 제거 위치 app.py:134/126/234) + "영상 아레나" 절차. 검증: 문서 참조 심볼(MURA_MODEL/ARCH·label_from_path·train/evaluate 옵션·한계문구) 코드 실재 확인. 6번(D7 준비) 완료.
+- [D8 7-1/7-3] scripts/pacs_scp.py — pynetdicom C-STORE SCP 수신 서버 골격(수신→dicom_io→deid→store, status=received(PACS)). pynetdicom 미설치 시 정직 종료. requirements pynetdicom==3.0.4 추가. 검증: 서버 기동·종료 + 미설치 폴백 2 passed, 전체 60 passed.
+- [D8 7-2] docs/D8_PLAN.md — 아침 체크리스트(수신서버 기동·Orthanc 설치·storescu 전송 시연·보관함 확인·README 업로드vs수신 차이 위치). Orthanc·실전송은 사람이.
+- [7번 D8 준비 완료] push·공개배포·Orthanc 실전송 금지 유지.
