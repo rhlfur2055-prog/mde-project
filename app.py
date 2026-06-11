@@ -66,15 +66,18 @@ def page_upload() -> None:
             f"블러 영역: {len(result['blurred_regions'])}개**"
         )
         if removed:
+            # 화면 표시: 원본값(PHI)은 제외 — 무엇을 어떻게 처리했는지만 보여준다
             st.dataframe(
                 [
                     {"태그": r["tag"], "항목": r["keyword"], "조치": r["action"],
-                     "원본값": r["old"], "치환값": r["new"]}
+                     "치환값": r["new"]}
                     for r in removed
                 ],
                 use_container_width=True,
             )
 
+        # DB 저장: old(지워진 원본 PHI)를 제거하고 저장 — 디스크에 PHI 미보관
+        removed_for_db = deid.strip_phi_for_storage(removed)
         meta = loaded["metadata"]
         rid = store.add_study(
             anon_patient_id=str(result["dataset"].get("PatientID", "")),
@@ -83,7 +86,7 @@ def page_upload() -> None:
             body_part=meta.get("BodyPartExamined", ""),
             num_removed_tags=len(removed),
             num_blurred_regions=len(result["blurred_regions"]),
-            removed_tags=json.dumps(removed, ensure_ascii=False),
+            removed_tags=json.dumps(removed_for_db, ensure_ascii=False),
         )
         # 비식별 이미지를 캐시에 저장 → 화면②가 다시 읽어 분석한다 (PHI 미저장)
         Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
@@ -183,9 +186,10 @@ def _render_detail(store: Store, sid: int) -> None:
         tags = json.loads(d["removed_tags"] or "[]")
         st.markdown(f"**제거/치환된 식별 태그: {len(tags)}개**")
         if tags:
+            # 원본값(PHI)은 디스크에 저장하지 않으므로 표시하지 않는다
             st.dataframe(
                 [{"태그": t["tag"], "항목": t["keyword"], "조치": t["action"],
-                  "원본값": t["old"], "치환값": t["new"]} for t in tags],
+                  "치환값": t.get("new", "")} for t in tags],
                 use_container_width=True, hide_index=True,
             )
 

@@ -62,6 +62,15 @@ def deid_dataset(ds: pydicom.Dataset) -> tuple[pydicom.Dataset, list[dict[str, A
     return out, removed
 
 
+def strip_phi_for_storage(removed_tags: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """DB·디스크 저장용으로 각 항목에서 old(지워진 원본 PHI 값)를 제거한다.
+
+    저장/화면 표시 항목 = tag·keyword·action·new 까지만. old는 절대 영속화하지 않는다.
+    (deid.run/ deid_dataset 이 메모리상에서 old를 반환하는 것은 비식별 처리에 필요하므로 유지.)
+    """
+    return [{k: v for k, v in r.items() if k != "old"} for r in removed_tags]
+
+
 def detect_text_regions(img8: np.ndarray, bright_thresh: int = 230,
                         min_aspect: float = 2.5) -> list[list[int]]:
     """8비트 그레이스케일에서 burned-in 텍스트로 추정되는 영역 박스를 검출한다.
