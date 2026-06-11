@@ -12,7 +12,7 @@ from pathlib import Path
 import cv2
 import streamlit as st
 
-from core import deid, dicom_io, infer, preprocess
+from core import deid, dicom_io, infer, preprocess, report
 from core.store import Store
 
 CACHE_DIR = "data/cache"
@@ -201,8 +201,49 @@ def _render_detail(store: Store, sid: int) -> None:
         c3.metric("처리 시간", f"{d['verdict_ms'] or 0:.0f} ms")
         if d["verdict_top"]:
             st.caption(f"최다 활성 소견(흉부 모델): {d['verdict_top']} · 모델 {d['verdict_model']}")
+        _render_report_section(sid, d)
     else:
         st.info("미분석 — ② 분석에서 [분석 시작]을 실행하세요.")
+
+
+def _render_report_section(sid: int, d) -> None:
+    st.markdown("**보고서 초안 (품질 게이트 통과본만 표시)**")
+    cache_path = f"{CACHE_DIR}/report_{sid}.json"
+
+    if st.button("보고서 초안 생성", key=f"report_{sid}"):
+        if Path(cache_path).exists():  # 같은 study 재생성 → 캐시 사용 (LLM 재호출 없음)
+            rep = json.loads(Path(cache_path).read_text(encoding="utf-8"))
+            st.caption("캐시된 보고서 사용 (Gemini 재호출 없음)")
+        else:
+            with st.status("Gemini로 초안 생성 중...", expanded=False) as status:
+                analysis = {"label": d["verdict_label"], "top_finding": d["verdict_top"],
+                            "confidence": d["verdict_conf"]}
+                try:
+                    rep = report.generate_report(analysis)
+                except Exception as exc:  # noqa: BLE001 — API 실패를 정직하게 표면화
+                    status.update(label="생성 실패", state="error")
+                    st.error(f"Gemini 호출 실패: {exc}")
+                    return
+                status.update(label="생성 완료", state="complete")
+                Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
+                Path(cache_path).write_text(json.dumps(rep, ensure_ascii=False, indent=2),
+                                            encoding="utf-8")
+        _show_report(rep)
+
+
+def _show_report(rep: dict) -> None:
+    gate = rep["gate"]
+    if gate["passed"]:
+        st.success(f"게이트 통과 (재시도 {gate['retries']}회)")
+        st.write(rep["draft"])
+        if rep.get("evidence_tags"):
+            st.caption("근거 태그: " + ", ".join(rep["evidence_tags"]))
+    else:
+        # 게이트 미통과 — 초안은 노출하지 않고 게이트 리포트만 표시
+        st.error(f"게이트 미통과 (재시도 {gate['retries']}회) — 초안은 표시하지 않습니다.")
+    with st.expander("게이트 리포트"):
+        st.write({"passed": gate["passed"], "retries": gate["retries"],
+                  "violations": gate["violations"]})
 
 
 def page_archive() -> None:

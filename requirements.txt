@@ -6,4 +6,6 @@ pytest>=8.0           # core 모듈 단위 테스트
 torch>=2.2            # TorchXRayVision 추론 백엔드 (CPU 휠 권장)
 torchvision>=0.17     # xrv 이미지 변환 (XRayCenterCrop/XRayResizer)
 torchxrayvision>=1.2  # D2 베이스라인 — 흉부 X-ray 사전학습 분류기 (근골격은 D7 MURA 교체)
+google-genai>=1.0     # 보고서 초안 생성용 Gemini 클라이언트 (spec §4 — 외부 API는 Gemini만)
+python-dotenv>=1.0    # .env에서 GEMINI_API_KEY 로드
 
