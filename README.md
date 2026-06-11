@@ -35,6 +35,23 @@ Python 3.12+ (3.13 검증) · Streamlit · 외부 API는 Gemini만 · 저장은 
 
 ---
 
+## 입력 경로 — 파일 업로드 vs PACS 네트워크 수신 (D8)
+
+같은 처리(비식별→판정→저장)를 두 경로로 받는다:
+- **① 파일 업로드** (화면①) — 사람이 `.dcm`을 끌어다 놓음.
+- **PACS C-STORE 네트워크 수신** (`scripts/pacs_scp.py`) — 병원 PACS처럼 DICOM을 네트워크로 받음.
+
+**실 C-STORE 전송 시연 로그** (pynetdicom `storescu` → medgate SCP, 실제 DICOM association):
+```
+[PACS] C-STORE SCP 기동: AET=MEDGATE port=11112
+[PACS] 수신: Modality=CT PatientName=CompressedSamples^CT1
+[PACS] 비식별: 식별태그 4개 제거/치환, 블러 0개
+[PACS] 추론: 이상 소견 의심 (78.3%) model=densenet121-res224-all 587ms
+[PACS] 저장 완료: studies.id=1 status=received(PACS)
+```
+→ 수신 DICOM이 `dicom_io→deid→preprocess→infer→store` 파이프라인을 실제로 탄다.
+보관함(③)에 `status=received(PACS)` 항목으로 나타난다. (Orthanc 연동 절차는 `docs/D8_PLAN.md`)
+
 ## 아키텍처
 
 ```

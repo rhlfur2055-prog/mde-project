@@ -31,8 +31,14 @@ def available() -> bool:
 
 
 def handle_store(event):
-    """수신 DICOM → dicom_io→deid(→infer)→store 파이프라인. 성공 시 0x0000 반환."""
-    from core import deid, dicom_io
+    """수신 DICOM → dicom_io→deid→preprocess→infer→store 파이프라인. 성공 시 0x0000 반환.
+
+    PACS_INFER=0 이면 추론을 건너뛴다(수신·비식별·저장만). 기본은 전체 파이프라인.
+    """
+    import json
+    import time
+
+    from core import deid, dicom_io, infer, preprocess
     from core.store import Store
 
     ds = event.dataset
@@ -40,12 +46,17 @@ def handle_store(event):
     tmp = os.path.join(tempfile.gettempdir(), f"medgate_pacs_{event.message_id}.dcm")
     try:
         ds.save_as(tmp, write_like_original=False)
+        # 1) 수신 → 읽기
         loaded = dicom_io.load(tmp)
+        print(f"[PACS] 수신: Modality={loaded['metadata'].get('Modality','?')} "
+              f"PatientName={loaded['metadata'].get('PatientName','?')}", flush=True)
+        # 2) 비식별
         result = deid.run(loaded)
-        store = Store()
         removed = deid.strip_phi_for_storage(result["removed_tags"])
-        import json
-        store.add_study(
+        print(f"[PACS] 비식별: 식별태그 {len(removed)}개 제거/치환, "
+              f"블러 {len(result['blurred_regions'])}개", flush=True)
+        store = Store()
+        rid = store.add_study(
             anon_patient_id=str(result["dataset"].get("PatientID", "")),
             source_filename=f"PACS:{getattr(ds, 'SOPInstanceUID', '?')}",
             modality=loaded["metadata"].get("Modality", ""),
@@ -55,10 +66,19 @@ def handle_store(event):
             removed_tags=json.dumps(removed, ensure_ascii=False),
             status="received(PACS)",
         )
+        # 3) 추론
+        if os.environ.get("PACS_INFER", "1") != "0":
+            infer.ensure_model()
+            t0 = time.perf_counter()
+            pred = infer.predict(preprocess.preprocess(result["pixels"]))
+            ms = (time.perf_counter() - t0) * 1000.0
+            if pred["label"] != infer.LABEL_NO_MODEL:
+                store.add_analysis(rid, pred["label"], float(pred["confidence"]),
+                                   pred.get("top_finding"), ms, pred.get("model", ""))
+            print(f"[PACS] 추론: {pred['label']} ({pred['confidence']*100:.1f}%) "
+                  f"model={pred.get('model')} {ms:.0f}ms", flush=True)
         store.close()
-        print(f"[PACS] 수신·비식별·저장 완료: {getattr(ds, 'Modality', '?')} "
-              f"태그 {len(removed)}개 제거", flush=True)
-        # TODO(D8): infer.predict + 결과 저장 연계 (추론은 무겁게 — 옵션/큐 권장)
+        print(f"[PACS] 저장 완료: studies.id={rid} status=received(PACS)", flush=True)
         return 0x0000  # Success
     except Exception as exc:  # noqa: BLE001
         print(f"[PACS] 처리 실패: {exc}", flush=True)
