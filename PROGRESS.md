@@ -30,3 +30,4 @@
 - [D7 6-2] scripts/train_mura.py — DenseNet 파인튜닝(정상/비정상 2-class) 골격, --data/MURA_DIR·--steps·--arch·--pretrained. 검증: 더미 4장 densenet121 2 step 실학습 도는 것 확인(loss 0.69→), 모델 저장. 1 passed.
 - [D7 6-3] core/infer.py MURA 로더+폴백 — MURA_MODEL(.pt) 있으면 DenseNet169 2-class 근골격 추론, 없으면 흉부 베이스라인 폴백. predict 인터페이스 불변. 검증: 폴백·MURA채택 2 passed, 전체 57 passed.
 - [D7 6-5] scripts/evaluate_mura.py — "영상 아레나": .pt 모델들을 MURA 정답으로 채점→정확도/민감도/특이도 리더보드(정확도순)→1등 채택 후보. 검증: 더미 모델 2·이미지 4로 리더보드 파이프라인 1 passed.
+- [D7 6-4/6-6] docs/D7_PLAN.md — 아침 실행 체크리스트(MURA 신청 URL·다운로드·라벨 CSV 교차검증·학습·영상아레나 평가·1등 채택·화면② 한계문구 제거 위치 app.py:134/126/234) + "영상 아레나" 절차. 검증: 문서 참조 심볼(MURA_MODEL/ARCH·label_from_path·train/evaluate 옵션·한계문구) 코드 실재 확인. 6번(D7 준비) 완료.
