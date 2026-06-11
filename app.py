@@ -6,16 +6,32 @@ D1: 화면① 업로드(DICOM 읽기→비식별→비교 표시→보관함 기
 """
 import io
 import json
+import os
 import time
 from pathlib import Path
 
 import cv2
 import streamlit as st
 
-from core import deid, dicom_io, infer, preprocess, report
+from core import arena, deid, dicom_io, infer, preprocess, report
 from core.store import Store
 
 CACHE_DIR = "data/cache"
+# 배포(Streamlit Cloud)에서는 키가 st.secrets로 주입된다 → core가 읽는 os.environ으로 브리지.
+_SECRET_KEYS = ["GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_EMBED_MODEL",
+                "MAX_LLM_CALLS", "DEMO_READONLY"]
+
+
+def _bridge_secrets() -> None:
+    try:
+        for k in _SECRET_KEYS:
+            if k not in os.environ and k in st.secrets:
+                os.environ[k] = str(st.secrets[k])
+    except Exception:  # noqa: BLE001 — secrets 미설정(로컬)은 정상
+        pass
+
+
+_bridge_secrets()
 
 DISCLAIMER = (
     "본 서비스는 교육·기술 데모입니다. 의료 진단이 아니며, "
@@ -272,16 +288,82 @@ def page_archive() -> None:
         st.caption("↑ 행을 선택하면 상세가 표시됩니다.")
 
 
+def page_arena() -> None:
+    st.header("④ 아레나 — 보고서 작성 프롬프트 구성 서바이벌")
+    cases = json.loads(Path("data/benchmark_cases.json").read_text(encoding="utf-8"))["cases"]
+    st.caption(
+        f"채점 케이스 {len(cases)}개 · 구성 50개 생성 → 하드게이트 → 4축 채점 → 70컷 → "
+        "쌍대결 → 생존 10 / 해고 40"
+    )
+
+    adopted = arena.load_adopted()
+    if adopted:
+        st.info(f"현재 채택된 운영 구성: **{adopted['config']['id']}** — {adopted['instruction']}")
+
+    if st.button("아레나 실행", type="primary"):
+        with st.status("아레나 실행 중... (구성 50개 생성·채점·쌍대결 — 수 분 소요)",
+                       expanded=True) as status:
+            try:
+                lb = arena.run_arena(cases)
+            except Exception as exc:  # noqa: BLE001
+                status.update(label="실행 실패", state="error")
+                st.error(str(exc))
+                return
+            state = "error" if lb["stopped"] else "complete"
+            label = ("중단 — 호출 상한 초과" if lb["stopped"]
+                     else f"완료 — LLM 호출 {lb['used_calls']}/{lb['max_calls']}")
+            status.update(label=label, state=state)
+        st.session_state["arena_lb"] = lb
+
+    lb = st.session_state.get("arena_lb")
+    if lb is None and Path(arena.LEADERBOARD_PATH).exists():
+        lb = json.loads(Path(arena.LEADERBOARD_PATH).read_text(encoding="utf-8"))
+    if lb is None:
+        st.info("‘아레나 실행’을 눌러 시작하세요. (재실행 시 캐시 사용 — LLM 0회 호출)")
+        return
+
+    st.caption(f"LLM 호출 {lb['used_calls']}/{lb['max_calls']}"
+               + (" · ⚠️ 중단됨" if lb["stopped"] else ""))
+
+    st.subheader(f"생존 {len(lb['survivors'])}")
+    if lb["survivors"]:
+        st.dataframe(
+            [{"순위": s["rank"], "구성": s["id"], "역할": s["config"]["role_style"],
+              "신중도": s["config"]["caution"], "구조": s["config"]["structure"],
+              "합성": s["composite"], "정확성": s["axes"]["accuracy"],
+              "적합도": s["axes"]["fitness"], "근거": s["axes"]["evidence"],
+              "구별성": s["axes"]["distinctness"], "승수": s["wins"]}
+             for s in lb["survivors"]],
+            use_container_width=True, hide_index=True,
+        )
+
+    st.subheader(f"해고 {len(lb['fired'])}")
+    st.dataframe(
+        [{"구성": f["id"], "합성": f.get("composite"), "사유": f["reason"]}
+         for f in lb["fired"]],
+        use_container_width=True, hide_index=True,
+    )
+
+    if lb["winner"]:
+        st.divider()
+        w = lb["winner"]
+        st.markdown(f"**1등: {w['id']}** — {arena.config_instruction(w['config'])}")
+        if st.button("1등 채택 (운영 프롬프트로 저장)"):
+            arena.adopt_config(w["config"])
+            st.success(f"{w['id']} 채택됨 — 이후 ③ 보고서 초안이 이 구성으로 생성됩니다.")
+            st.rerun()
+
+
 def page_todo(title: str, step: str) -> None:
     st.header(title)
-    st.info(f"이 화면은 아직 구현 전입니다 ({step}). 현재는 ①·②·③ 만 동작합니다.")
+    st.info(f"이 화면은 아직 구현 전입니다 ({step}).")
 
 
 PAGES = {
     "① 업로드": page_upload,
     "② 분석": page_analyze,
     "③ 보관함": page_archive,
-    "④ 아레나": lambda: page_todo("④ 아레나", "D6"),
+    "④ 아레나": page_arena,
 }
 
 

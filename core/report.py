@@ -26,6 +26,7 @@ EVIDENCE_TAGS = ["[AI결과]", "[일반소견]", "[불확실]"]
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 MAX_RETRIES = 3
+ADOPTED_PATH = "data/arena_adopted.json"
 
 DISCLAIMER = (
     "본 서비스는 교육·기술 데모입니다. 의료 진단이 아니며, "
@@ -92,13 +93,26 @@ def _model_name() -> str:
     return os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
 
 
+def _adopted_instruction() -> Optional[str]:
+    """아레나 1등 채택 구성이 있으면 그 작성 지침을 반환 (없으면 None)."""
+    p = pathlib.Path(ADOPTED_PATH)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8")).get("instruction")
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
 def _build_prompt(analysis: dict[str, Any], prev_violations: Optional[list[str]]) -> str:
     fix = ""
     if prev_violations:
         fix = ("\n[직전 시도가 아래 규칙을 위반했습니다 — 반드시 수정하세요]\n- "
                + "\n- ".join(prev_violations))
+    adopted = _adopted_instruction()
+    style = f"\n[채택된 작성 구성 — 이 스타일을 따르세요] {adopted}" if adopted else ""
     return f"""당신은 영상의학 보고서 초안 작성 보조입니다.
-아래 AI 분석 결과를 바탕으로 한국어 X-ray 판독 '초안'을 작성하세요.
+아래 AI 분석 결과를 바탕으로 한국어 X-ray 판독 '초안'을 작성하세요.{style}
 
 [필수 규칙]
 - 진단을 단정하지 마세요. 모든 소견은 '의심', '가능성', '확인 필요' 같은 헤지 표현을 사용.

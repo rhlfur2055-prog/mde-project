@@ -1,4 +1,6 @@
 """report 게이트 단위 테스트 — Gemini 호출 없이 가짜 초안 문자열로 검증 (spec §6)."""
+import json
+
 from core import report
 
 
@@ -79,6 +81,24 @@ def test_generate_report_fails_after_max_retries():
     assert rep["gate"]["retries"] == 3
     assert calls["n"] == 4                      # 최초 1 + 재시도 3
     assert len(rep["gate"]["violations"]) >= 1
+
+
+def test_build_prompt_includes_adopted_style(tmp_path, monkeypatch):
+    """아레나 1등 채택 구성이 있으면 보고서 프롬프트에 그 스타일이 주입된다 (D6-3 연계)."""
+    p = tmp_path / "adopted.json"
+    p.write_text(json.dumps({"config": {"id": "config_05"},
+                             "instruction": "역할 스타일: 임상 요약체 / 신중도: 보수적"}),
+                 encoding="utf-8")
+    monkeypatch.setattr(report, "ADOPTED_PATH", str(p))
+    prompt = report._build_prompt({"label": "정상 범위", "top_finding": "x", "confidence": 0.5}, None)
+    assert "채택된 작성 구성" in prompt
+    assert "임상 요약체" in prompt
+
+
+def test_build_prompt_without_adopted(tmp_path, monkeypatch):
+    monkeypatch.setattr(report, "ADOPTED_PATH", str(tmp_path / "none.json"))
+    prompt = report._build_prompt({"label": "정상 범위", "top_finding": "x", "confidence": 0.5}, None)
+    assert "채택된 작성 구성" not in prompt
 
 
 def test_generate_report_feeds_violations_back():
