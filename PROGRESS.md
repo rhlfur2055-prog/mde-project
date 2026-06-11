@@ -29,3 +29,4 @@
 - [D7 6-1] core/mura_dataset.py — MURA 폴더 파서(positive/negative 마커 라벨 + ImageFolder 폴백, CSV 교차검증 TODO). 검증: 더미 이미지로 라벨링 3 passed.
 - [D7 6-2] scripts/train_mura.py — DenseNet 파인튜닝(정상/비정상 2-class) 골격, --data/MURA_DIR·--steps·--arch·--pretrained. 검증: 더미 4장 densenet121 2 step 실학습 도는 것 확인(loss 0.69→), 모델 저장. 1 passed.
 - [D7 6-3] core/infer.py MURA 로더+폴백 — MURA_MODEL(.pt) 있으면 DenseNet169 2-class 근골격 추론, 없으면 흉부 베이스라인 폴백. predict 인터페이스 불변. 검증: 폴백·MURA채택 2 passed, 전체 57 passed.
+- [D7 6-5] scripts/evaluate_mura.py — "영상 아레나": .pt 모델들을 MURA 정답으로 채점→정확도/민감도/특이도 리더보드(정확도순)→1등 채택 후보. 검증: 더미 모델 2·이미지 4로 리더보드 파이프라인 1 passed.
