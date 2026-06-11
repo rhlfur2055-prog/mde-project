@@ -27,3 +27,4 @@
 - [D5-2] `6370424` DEMO_READONLY 안전장치.
 - [5번 배포 사전점검] **통과** — (1) .env 미추적(추적 env는 .env.example만), (2) 하드코딩 키 grep 0건, (3) 서드파티 import(cv2/google/numpy/pydicom/pytest/streamlit/torch/torchvision/torchxrayvision) 전부 requirements 포함. 참고: python-dotenv는 목록에 있으나 현재 미사용(report.py가 BOM 안전 위해 .env 수동 파싱) — 무해, 유지. ★ push·공개배포는 사람이 아침에. core/config.py(순수 readonly 플래그) + app.py 전 페이지 버튼 disabled+잠금안내(업로드/분석/보고서/아레나 실행/1등 채택) + 사이드바 배너. 검증: AppTest로 readonly 시 아레나/채택 버튼 disabled·잠금안내 노출, 비-readonly 시 활성 — 3 passed. 전체 51 passed. DEMO_READONLY=true 헤드리스 부팅 health 200.
 - [D7 6-1] core/mura_dataset.py — MURA 폴더 파서(positive/negative 마커 라벨 + ImageFolder 폴백, CSV 교차검증 TODO). 검증: 더미 이미지로 라벨링 3 passed.
+- [D7 6-2] scripts/train_mura.py — DenseNet 파인튜닝(정상/비정상 2-class) 골격, --data/MURA_DIR·--steps·--arch·--pretrained. 검증: 더미 4장 densenet121 2 step 실학습 도는 것 확인(loss 0.69→), 모델 저장. 1 passed.
