@@ -1,0 +1,23 @@
+# 환경변수 — API 키 (절대 커밋 금지)
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# 데이터·모델 (대용량 — 준비 스크립트로 재현)
+data/mura/
+*.pt
+*.pth
+*.onnx
+
+# DB·캐시 (재현 가능 — spec §3)
+data/medgate.db
+data/cache/
+
+# 산출물
+outputs/
+*.log

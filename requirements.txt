@@ -1,0 +1,5 @@
+pydicom>=3.0          # DICOM 파일 읽기·식별 태그 조작
+numpy>=1.26           # 픽셀 배열 처리
+opencv-python>=4.9    # 픽셀 내 글자영역 검출·블러 (plateguard core.py 패턴 이식)
+streamlit>=1.40       # 화면① 업로드 UI (단일 앱)
+pytest>=8.0           # core 모듈 단위 테스트
