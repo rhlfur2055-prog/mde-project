@@ -54,3 +54,4 @@
 - infer 베이스라인은 흉부(도메인 외) — MURA_MODEL 있으면 자동 교체(폴백 구조 완료).
 - python-dotenv는 requirements에 있으나 미사용(report.py 수동 .env 파싱) — 무해.
 - [D8 실증] 실제 C-STORE 전송 시연 — pynetdicom storescu(SCU) → medgate pacs_scp(SCP)로 pydicom 샘플(CT_small.dcm) 전송. 로그 원문 확인: 수신(CT)→비식별(4태그 제거)→추론(이상 78.3%, densenet121, 587ms)→저장(studies.id=1, received(PACS)). handle_store를 전체 파이프라인(수신→비식별→preprocess→infer→store)으로 보강, 스모크 2 passed. Docker 설치됨(v29.2.0) — Orthanc 시연 후속.
+- [D8 Orthanc — 막힘/기록] Docker CLI는 설치(v29.2.0)됐으나 **Docker Desktop 데몬 미실행**(npipe 연결 실패)이라 Orthanc 컨테이너 기동 불가. 데몬 기동은 시스템 동작 → 무인 실행 안 함(사람이 결정). 잔여 컨테이너 없음. **단, 핵심 검증(실제 C-STORE 전송→수신→비식별→추론→저장)은 storescu→medgate SCP로 이미 실증·커밋(118885e)** — Orthanc는 "현실적 소스" 추가 레이어일 뿐. D8_PLAN 부록에 Docker 켠 뒤 바로 쓸 검증된 Orthanc env-config 명령 추가.

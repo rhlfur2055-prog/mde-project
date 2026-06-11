@@ -48,7 +48,41 @@ python -m scripts.pacs_scp --port 11112 --aet MEDGATE
 - [ ] `README.md` 4페이지 설명/아키텍처에 한 줄: **"입력 경로: ① 파일 업로드 또는 PACS C-STORE 네트워크 수신(D8) — 이후 처리 동일."**
   - 추가 위치 후보: README "## 4페이지 구성" 또는 "## 아키텍처" 섹션.
 
+---
+
+## 부록 — 검증된 명령 모음 (밤샘 작업 중 확인)
+
+### A. storescu 직접 전송 (Orthanc 불필요 — 이미 실증 완료)
+```bash
+# 터미널1: medgate 수신 서버
+python -m scripts.pacs_scp --port 11112
+# 터미널2: pydicom 샘플을 medgate로 C-STORE 전송 (실제 전송 성공 로그 확인됨)
+SAMPLE=$(python -c "from pydicom.data import get_testdata_file; print(get_testdata_file('CT_small.dcm'))")
+python -m pynetdicom storescu 127.0.0.1 11112 "$SAMPLE" -aec MEDGATE
+```
+
+### B. Orthanc(가짜 병원 PACS) → medgate 푸시 (Docker Desktop 실행 필요)
+> 밤샘 작업 시 **Docker CLI는 설치(v29.2.0)됐으나 Docker Desktop 데몬이 미실행**이라 미수행.
+> Docker Desktop을 켠 뒤 아래를 실행하면 됨(명령은 env-config로 정리해둠 — orthancteam/orthanc).
+```bash
+# 1) Orthanc 기동: medgate를 modality로 등록(컨테이너→호스트는 host.docker.internal)
+docker run -d --name medgate-orthanc -p 8042:8042 -p 4242:4242 \
+  -e 'ORTHANC__DICOM_MODALITIES={"medgate":["MEDGATE","host.docker.internal",11112]}' \
+  -e ORTHANC__AUTHENTICATION_ENABLED=false -e ORTHANC__REMOTE_ACCESS_ALLOWED=true \
+  orthancteam/orthanc
+# 2) 호스트에 medgate 수신 서버 기동
+python -m scripts.pacs_scp --port 11112
+# 3) 샘플을 Orthanc에 업로드 → 인스턴스 ID 획득
+SAMPLE=$(python -c "from pydicom.data import get_testdata_file; print(get_testdata_file('CT_small.dcm'))")
+ID=$(curl -s -X POST http://localhost:8042/instances --data-binary @"$SAMPLE" | python -c "import sys,json;print(json.load(sys.stdin)['ID'])")
+# 4) Orthanc → medgate 로 C-STORE 푸시
+curl -s -X POST http://localhost:8042/modalities/medgate/store -d "$ID"
+# 5) medgate 서버 로그에 [PACS] 수신·비식별·추론·저장 확인 → 화면③에 received(PACS) 항목
+# 정리: docker rm -f medgate-orthanc
+```
+
 ## 주의
 - ★ Orthanc 설치·실제 C-STORE 전송·방화벽/포트 개방은 **사람이 직접**. 무인 자동 실행 금지.
+- Docker Desktop **데몬 기동**도 시스템 동작이라 무인 실행하지 않음(사람이 켠다).
 - 수신 DICOM도 실환자 데이터 금지 — pydicom 샘플/공개 데이터만.
 - 운영 노출 시 DICOM 포트(11112)는 신뢰 네트워크/AET 화이트리스트로 제한.
