@@ -50,9 +50,10 @@ def train(data_dir: str, epochs: int = 3, steps: int | None = None, batch: int =
           lr: float = 1e-4, arch: str = "densenet169", pretrained: bool = False,
           out: str = "data/mura_model.pt", device: str = "cpu",
           max_per_class: int | None = None, augment: bool = False,
-          log_every: int = 1) -> dict:
+          log_every: int = 1, parts: "list[str] | None" = None) -> dict:
     import time
-    ds = MuraDataset(data_dir, transform=build_transform(augment), max_per_class=max_per_class)
+    ds = MuraDataset(data_dir, transform=build_transform(augment),
+                     max_per_class=max_per_class, parts=parts)
     if len(ds) == 0:
         raise SystemExit(f"데이터 없음: {data_dir} 에 이미지가 없습니다.")
     pin = device.startswith("cuda")

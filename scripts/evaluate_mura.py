@@ -65,8 +65,9 @@ def _arch_from_name(path: str, default: str) -> str:
 def evaluate(models_dir: str, data_dir: str, arch: str = "densenet169",
              device: str = "cpu", batch: int = 8,
              max_per_class: "int | None" = None,
-             out: "str | None" = None) -> list[dict]:
-    ds = MuraDataset(data_dir, transform=build_transform(), max_per_class=max_per_class)
+             out: "str | None" = None, parts: "list[str] | None" = None) -> list[dict]:
+    ds = MuraDataset(data_dir, transform=build_transform(),
+                     max_per_class=max_per_class, parts=parts)
     if len(ds) == 0:
         raise SystemExit(f"테스트 데이터 없음: {data_dir}")
     dl = DataLoader(ds, batch_size=batch)
