@@ -44,14 +44,14 @@ def sig(cand: dict, scope) -> str:
 
 
 def seed_candidates(n: int) -> list[dict]:
-    """1세대 시드 — arch·lr·augment 다양하게."""
+    """1세대 시드 — 정확도 우선: densenet169 사전학습 + lr 1e-4~3e-4 + 강증강 중심."""
     base = [
-        {"arch": "densenet169", "lr": 1e-4, "augment": False},
-        {"arch": "resnet50", "lr": 1e-4, "augment": False},
-        {"arch": "densenet121", "lr": 3e-4, "augment": True},
+        {"arch": "densenet169", "lr": 1e-4, "augment": True},
         {"arch": "densenet169", "lr": 3e-4, "augment": True},
-        {"arch": "resnet50", "lr": 1e-3, "augment": False},
-        {"arch": "densenet121", "lr": 1e-4, "augment": False},
+        {"arch": "densenet121", "lr": 1e-4, "augment": True},
+        {"arch": "resnet50", "lr": 1e-4, "augment": True},
+        {"arch": "densenet169", "lr": 2e-4, "augment": False},
+        {"arch": "densenet121", "lr": 3e-4, "augment": True},
     ]
     return base[:n]
 
@@ -97,10 +97,11 @@ def train_candidate(cand: dict, scope, models_dir: str, train_dir: str, device: 
 
 
 def evolve(train_dir: str, valid_dir: str, models_dir: str, out_prefix: str,
-           max_generations: int = 6, candidates_per_gen: int = 4, epochs: int = 3,
+           max_generations: int = 6, candidates_per_gen: int = 4, epochs: int = 6,
            device: str = "cuda", batch: int = 16, pretrained: bool = True,
-           scope_fn=scope_for_gen, eval_max_per_class=200, train_max_per_class=None,
-           early_stop: float = 0.01, patience: int = 2, seed: int = 7) -> dict:
+           scope_fn=scope_for_gen, eval_max_per_class=None, train_max_per_class=None,
+           early_stop: float = 0.005, patience: int = 2, seed: int = 7,
+           target_accuracy: float = 0.86) -> dict:
     os.makedirs(models_dir, exist_ok=True)
     rng = random.Random(seed)
     population = seed_candidates(candidates_per_gen)
@@ -139,7 +140,13 @@ def evolve(train_dir: str, valid_dir: str, models_dir: str, out_prefix: str,
         print(f"  → 세대 {gen} 최고 정확도 {gen_best:.4f} | 생존 {survivors[0]['sig']} | "
               f"개선 {gen_best - best_so_far:+.4f}", flush=True)
 
-        # 조기중단 판정
+        # 목표 정확도 도달 시 즉시 종료
+        if gen_best >= target_accuracy:
+            print(f"  ✅ 목표 정확도 {target_accuracy} 도달 (gen {gen}, acc={gen_best:.4f}) — 종료", flush=True)
+            best_so_far = max(best_so_far, gen_best)
+            break
+
+        # 조기중단 판정 (개선 < early_stop 가 patience 세대 연속)
         if gen_best - best_so_far < early_stop:
             stall += 1
         else:
@@ -176,16 +183,23 @@ def main() -> None:
     ap.add_argument("--out-prefix", default="data/evolve", dest="out_prefix")
     ap.add_argument("--max-generations", type=int, default=6, dest="max_generations")
     ap.add_argument("--candidates-per-gen", type=int, default=4, dest="candidates_per_gen")
-    ap.add_argument("--epochs", type=int, default=3)
+    ap.add_argument("--epochs", type=int, default=6)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--device", default="cuda")
-    ap.add_argument("--eval-max-per-class", type=int, default=200, dest="eval_max_per_class")
+    ap.add_argument("--scope", choices=["all7", "schedule"], default="all7",
+                    help="all7=항상 7부위(정확도 우선) / schedule=초기 2부위")
+    ap.add_argument("--target-accuracy", type=float, default=0.86, dest="target_accuracy")
+    ap.add_argument("--early-stop", type=float, default=0.005, dest="early_stop")
+    ap.add_argument("--eval-max-per-class", type=int, default=None, dest="eval_max_per_class",
+                    help="None=valid 전체 채점(진짜 일반화 정확도)")
     a = ap.parse_args()
     if a.device.startswith("cuda") and not torch.cuda.is_available():
         raise SystemExit("GPU 필수: torch.cuda.is_available()=False — 중단")
+    scope_fn = (lambda g: None) if a.scope == "all7" else scope_for_gen
     evolve(a.train, a.valid, a.models_dir, a.out_prefix, a.max_generations,
            a.candidates_per_gen, a.epochs, a.device, a.batch,
-           eval_max_per_class=a.eval_max_per_class)
+           scope_fn=scope_fn, eval_max_per_class=a.eval_max_per_class,
+           early_stop=a.early_stop, target_accuracy=a.target_accuracy)
 
 
 if __name__ == "__main__":

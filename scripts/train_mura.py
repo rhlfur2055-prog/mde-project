@@ -38,11 +38,14 @@ def build_model(arch: str = "densenet169", pretrained: bool = False) -> nn.Modul
 
 
 def build_transform(augment: bool = False) -> T.Compose:
-    # ImageNet 정규화 + (옵션) 증강. MURA 논문식 좌우반전·회전.
+    # ImageNet 정규화 + (옵션) 강한 증강 — MURA 표준: 회전·좌우반전·밝기·대비.
     norm = T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     if augment:
-        return T.Compose([T.Resize((224, 224)), T.RandomHorizontalFlip(),
-                          T.RandomRotation(15), T.ToTensor(), norm])
+        return T.Compose([T.Resize((224, 224)),
+                          T.RandomHorizontalFlip(),
+                          T.RandomRotation(20),
+                          T.ColorJitter(brightness=0.2, contrast=0.2),
+                          T.ToTensor(), norm])
     return T.Compose([T.Resize((224, 224)), T.ToTensor(), norm])
 
 
