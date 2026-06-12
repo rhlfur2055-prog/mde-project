@@ -48,10 +48,20 @@ export async function createPersonDetector(): Promise<PersonDetector> {
   const ort = await import("onnxruntime-web");
   ort.env.wasm.wasmPaths = YOLO_CONFIG.WASM_PATH;
 
-  const session = await ort.InferenceSession.create(YOLO_CONFIG.MODEL_URL, {
-    executionProviders: ["wasm"],
-    graphOptimizationLevel: "all",
-  });
+  // WebGPU 우선(미지원 시 WASM 폴백) — 모바일/PC GPU 가속
+  let session: import("onnxruntime-web").InferenceSession;
+  try {
+    session = await ort.InferenceSession.create(YOLO_CONFIG.MODEL_URL, {
+      executionProviders: [...YOLO_CONFIG.EXECUTION_PROVIDERS],
+      graphOptimizationLevel: "all",
+    });
+  } catch {
+    // WebGPU 초기화 실패 시 WASM 단독 재시도
+    session = await ort.InferenceSession.create(YOLO_CONFIG.MODEL_URL, {
+      executionProviders: ["wasm"],
+      graphOptimizationLevel: "all",
+    });
+  }
 
   const S = YOLO_CONFIG.INPUT_SIZE;
   // 전처리용 오프스크린 캔버스(재사용)

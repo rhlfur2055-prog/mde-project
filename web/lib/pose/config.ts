@@ -22,5 +22,8 @@ export const YOLO_CONFIG = {
   PERSON_CLASS: 0, // COCO class 0 = person
   CONF_THRESHOLD: 0.5,
   IOU_THRESHOLD: 0.45,
-  DETECT_INTERVAL_MS: 200, // 사람검출은 ~5fps로(자세추정과 분리)
+  // 사람 박스는 천천히 움직임 → 검출 빈도를 낮춰 메인스레드 블로킹 최소화
+  DETECT_INTERVAL_MS: 800,
+  // WebGPU(폰·PC GPU) 우선, 미지원 시 WASM 폴백 → 모바일 최적화
+  EXECUTION_PROVIDERS: ["webgpu", "wasm"] as const,
 } as const;
