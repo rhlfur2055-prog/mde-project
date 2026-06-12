@@ -8,9 +8,17 @@ import {
   type PersonDetector,
 } from "@/lib/pose/personDetector";
 import { YOLO_CONFIG } from "@/lib/pose/config";
-import { computeBodyMetrics, type BodyMetrics } from "@/lib/golden/score";
+import {
+  computeBodyMetrics,
+  forwardHeadCvaDeg,
+  kneeVarusDeg,
+  type BodyMetrics,
+} from "@/lib/golden/score";
+import { assessPosture, exerciseById } from "@/lib/exercise/exercises";
 import { saveScan } from "@/lib/supabase/scans";
 import Link from "next/link";
+
+type Assessment = { exerciseIds: string[]; advisories: string[] };
 
 type Status = "idle" | "loading" | "running" | "error";
 
@@ -38,6 +46,7 @@ export default function PoseCamera() {
   const [detected, setDetected] = useState(false);
   const [personScore, setPersonScore] = useState(0);
   const [metrics, setMetrics] = useState<BodyMetrics | null>(null);
+  const [assess, setAssess] = useState<Assessment | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
 
@@ -58,6 +67,7 @@ export default function PoseCamera() {
     setDetected(false);
     setPersonScore(0);
     setMetrics(null);
+    setAssess(null);
   }, []);
 
   const loop = useCallback(() => {
@@ -88,8 +98,23 @@ export default function PoseCamera() {
         // 점수는 ~5fps로 갱신(화면 떨림 방지) — P3 황금비율 엔진
         if (result.landmarks.length > 0 && t1 - lastMetricsAtRef.current >= 200) {
           lastMetricsAtRef.current = t1;
-          lastLandmarksRef.current = result.landmarks[0];
-          setMetrics(computeBodyMetrics(result.landmarks[0]));
+          const lm0 = result.landmarks[0];
+          lastLandmarksRef.current = lm0;
+          const m = computeBodyMetrics(lm0);
+          setMetrics(m);
+          // 신규 지표(거북목 CVA·오다리 내반) — 측면/정면은 기하로 자동 판별.
+          const cva = forwardHeadCvaDeg(lm0);
+          const varus = kneeVarusDeg(lm0);
+          setAssess(
+            assessPosture({
+              headTiltDeg: m.symmetry.headTiltDeg,
+              shoulderTiltDeg: m.symmetry.shoulderTiltDeg,
+              hipTiltDeg: m.symmetry.hipTiltDeg,
+              cvaDeg: cva.cvaDeg,
+              cvaAvailable: cva.available,
+              kneeVarusDeg: varus.available ? varus.varusDeg : 0,
+            }),
+          );
         }
         for (const landmarks of result.landmarks) {
           drawingUtils.drawConnectors(
@@ -302,6 +327,35 @@ export default function PoseCamera() {
               ))}
             </ul>
           )}
+
+          {assess && assess.exerciseIds.length > 0 && (
+            <div className="mt-3">
+              <span className="text-xs text-zinc-500">추천 교정운동</span>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {assess.exerciseIds.map((id) => {
+                  const ex = exerciseById(id);
+                  return ex ? (
+                    <Link
+                      key={id}
+                      href="/coach"
+                      className="rounded-full border border-zinc-300 px-3 py-1 text-xs text-zinc-700 hover:border-zinc-500 dark:border-zinc-700 dark:text-zinc-200"
+                    >
+                      {ex.emoji} {ex.name}
+                    </Link>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          )}
+
+          {assess?.advisories.map((a, i) => (
+            <p
+              key={i}
+              className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+            >
+              ⚠ {a}
+            </p>
+          ))}
 
           <div className="mt-4 flex items-center justify-between gap-3">
             <span className="text-xs text-zinc-500">{saveMsg}</span>

@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { computeBodyMetrics, lineTiltDeg, type Pt } from "./score";
-import { LM } from "./poseConfig";
+import {
+  computeBodyMetrics,
+  lineTiltDeg,
+  isSideView,
+  forwardHeadCvaDeg,
+  kneeVarusDeg,
+  type Pt,
+} from "./score";
+import { LM, POSTURE } from "./poseConfig";
 
 // 33개 기본 랜드마크(모두 보임) 생성 후 일부만 덮어쓰기
 function makeLandmarks(overrides: Record<number, Pt>): Pt[] {
@@ -79,5 +86,77 @@ describe("computeBodyMetrics", () => {
     const a = computeBodyMetrics(idealPose());
     const b = computeBodyMetrics(idealPose());
     expect(a).toEqual(b);
+  });
+});
+
+// 측면이면 양어깨 x가 거의 겹친다(어깨폭↓). 정면 idealPose 는 어깨폭 0.2/몸통 0.3.
+function sidePose(overrides: Record<number, Pt> = {}): Pt[] {
+  return makeLandmarks({
+    [LM.LEFT_SHOULDER]: { x: 0.5, y: 0.4, visibility: 1 },
+    [LM.RIGHT_SHOULDER]: { x: 0.52, y: 0.4, visibility: 1 },
+    [LM.LEFT_HIP]: { x: 0.5, y: 0.7, visibility: 1 },
+    [LM.RIGHT_HIP]: { x: 0.52, y: 0.7, visibility: 1 },
+    [LM.LEFT_EAR]: { x: 0.55, y: 0.25, visibility: 1 },
+    [LM.RIGHT_EAR]: { x: 0.55, y: 0.25, visibility: 1 },
+    ...overrides,
+  });
+}
+
+describe("isSideView", () => {
+  it("정면(어깨 넓음)은 false", () => {
+    expect(isSideView(idealPose())).toBe(false);
+  });
+  it("측면(어깨 겹침)은 true", () => {
+    expect(isSideView(sidePose())).toBe(true);
+  });
+});
+
+describe("forwardHeadCvaDeg", () => {
+  it("정면이면 보류(need-side)", () => {
+    const r = forwardHeadCvaDeg(idealPose());
+    expect(r.available).toBe(false);
+    expect(r.reason).toBe("need-side");
+  });
+  it("측면 — 귀가 앞으로 많이 나가면 CVA가 작다(전방두부)", () => {
+    // 귀를 어깨보다 크게 앞(x↑)으로 → dx 큼 → 각 작음
+    const fwd = forwardHeadCvaDeg(sidePose({ [LM.RIGHT_EAR]: { x: 0.75, y: 0.35, visibility: 1 } }));
+    const upright = forwardHeadCvaDeg(sidePose({ [LM.RIGHT_EAR]: { x: 0.53, y: 0.2, visibility: 1 } }));
+    expect(fwd.available).toBe(true);
+    expect(upright.available).toBe(true);
+    expect(fwd.cvaDeg).toBeLessThan(upright.cvaDeg);
+  });
+});
+
+describe("kneeVarusDeg", () => {
+  // 정면 판정 위해 어깨를 넓게(기본 0.5,0.5면 측면으로 오판)
+  const frontShoulders = {
+    [LM.LEFT_SHOULDER]: { x: 0.4, y: 0.4, visibility: 1 },
+    [LM.RIGHT_SHOULDER]: { x: 0.6, y: 0.4, visibility: 1 },
+  };
+  it("다리 곧게 펴면 내반각≈0", () => {
+    const pose = makeLandmarks({
+      ...frontShoulders,
+      [LM.LEFT_HIP]: { x: 0.45, y: 0.5, visibility: 1 },
+      [LM.LEFT_KNEE]: { x: 0.45, y: 0.7, visibility: 1 },
+      [LM.LEFT_ANKLE]: { x: 0.45, y: 0.9, visibility: 1 },
+      [LM.RIGHT_HIP]: { x: 0.55, y: 0.5, visibility: 1 },
+      [LM.RIGHT_KNEE]: { x: 0.55, y: 0.7, visibility: 1 },
+      [LM.RIGHT_ANKLE]: { x: 0.55, y: 0.9, visibility: 1 },
+    });
+    const r = kneeVarusDeg(pose);
+    expect(r.available).toBe(true);
+    expect(r.varusDeg).toBeCloseTo(0, 0);
+  });
+  it("무릎이 바깥으로 휘면 내반각이 커진다", () => {
+    const pose = makeLandmarks({
+      ...frontShoulders,
+      [LM.LEFT_HIP]: { x: 0.45, y: 0.5, visibility: 1 },
+      [LM.LEFT_KNEE]: { x: 0.38, y: 0.7, visibility: 1 }, // 무릎이 바깥(x↓)으로
+      [LM.LEFT_ANKLE]: { x: 0.45, y: 0.9, visibility: 1 },
+      [LM.RIGHT_HIP]: { x: 0.55, y: 0.5, visibility: 1 },
+      [LM.RIGHT_KNEE]: { x: 0.62, y: 0.7, visibility: 1 },
+      [LM.RIGHT_ANKLE]: { x: 0.55, y: 0.9, visibility: 1 },
+    });
+    expect(kneeVarusDeg(pose).varusDeg).toBeGreaterThan(POSTURE.KNEE_VARUS_DEG);
   });
 });

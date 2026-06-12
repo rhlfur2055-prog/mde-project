@@ -1,7 +1,7 @@
 // posera 체형·자세 점수 엔진 — 순수 함수(의존성 0, 테스트 가능).
 // 입력: MediaPipe 자세 랜드마크(정규화 좌표, y는 아래로 증가).
 // MediaPipe import를 피하려고 최소 타입만 정의 → core 순수성 유지(spec §2.8 정신).
-import { GOLDEN, LM } from "./poseConfig";
+import { GOLDEN, LM, POSTURE } from "./poseConfig";
 
 export type Pt = { x: number; y: number; z?: number; visibility?: number };
 
@@ -37,6 +37,17 @@ export function lineTiltDeg(a: Pt, b: Pt): number {
 
 const visible = (p: Pt | undefined): p is Pt =>
   !!p && (p.visibility === undefined || p.visibility >= GOLDEN.VISIBILITY_MIN);
+
+// 공용 기하: 정점 b의 a–b–c 사이각(도) [0,180]. exercises.ts 가 재사용(중복 제거).
+export function jointAngleDeg(a: Pt, b: Pt, c: Pt): number {
+  const v1x = a.x - b.x,
+    v1y = a.y - b.y,
+    v2x = c.x - b.x,
+    v2y = c.y - b.y;
+  const dot = v1x * v2x + v1y * v2y;
+  const m = Math.hypot(v1x, v1y) * Math.hypot(v2x, v2y) || 1e-6;
+  return (Math.acos(Math.max(-1, Math.min(1, dot / m))) * 180) / Math.PI;
+}
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
@@ -140,4 +151,61 @@ export function computeBodyMetrics(lm: Pt[]): BodyMetrics {
     },
     deviations,
   };
+}
+
+// ── 촬영 평면 자동감지 ── 측면이면 양어깨가 가로로 겹쳐 어깨폭이 좁아진다.
+// (정면/측면 2단 캡처 스텝을 새로 만들지 않고 기하로 추정 — 카메라 흐름 변경 없음.)
+export function isSideView(lm: Pt[]): boolean {
+  const lSh = lm[LM.LEFT_SHOULDER];
+  const rSh = lm[LM.RIGHT_SHOULDER];
+  const lHip = lm[LM.LEFT_HIP];
+  const rHip = lm[LM.RIGHT_HIP];
+  if (!visible(lSh) || !visible(rSh) || !visible(lHip) || !visible(rHip)) return false;
+  const shoulderW = Math.abs(lSh.x - rSh.x);
+  const torsoH = Math.abs(mid(lSh, rSh).y - mid(lHip, rHip).y) + 1e-6;
+  return shoulderW / torsoH < POSTURE.SIDE_VIEW_SHOULDER_RATIO;
+}
+
+// ── 거북목 CVA(측면 전용) ── 어깨→귀 선이 수평에서 이루는 각. 작을수록 전방두부(FHP).
+// 정면이면 계산 보류(available=false, reason=need-side) → UI가 측면 촬영을 유도.
+export type CvaResult = {
+  available: boolean;
+  cvaDeg: number;
+  reason?: "need-side" | "no-landmarks";
+};
+export function forwardHeadCvaDeg(lm: Pt[]): CvaResult {
+  if (!isSideView(lm)) {
+    const haveEar = visible(lm[LM.LEFT_EAR]) || visible(lm[LM.RIGHT_EAR]);
+    return { available: false, cvaDeg: 0, reason: haveEar ? "need-side" : "no-landmarks" };
+  }
+  // 더 잘 보이는 쪽 귀/어깨 선택
+  const score = (ei: number, si: number) =>
+    (visible(lm[ei]) ? (lm[ei].visibility ?? 1) : -1) +
+    (visible(lm[si]) ? (lm[si].visibility ?? 1) : -1);
+  const useRight = score(LM.RIGHT_EAR, LM.RIGHT_SHOULDER) >= score(LM.LEFT_EAR, LM.LEFT_SHOULDER);
+  const ear = useRight ? lm[LM.RIGHT_EAR] : lm[LM.LEFT_EAR];
+  const sh = useRight ? lm[LM.RIGHT_SHOULDER] : lm[LM.LEFT_SHOULDER];
+  if (!visible(ear) || !visible(sh)) return { available: false, cvaDeg: 0, reason: "no-landmarks" };
+  const dx = Math.abs(ear.x - sh.x); // 귀가 어깨보다 앞으로 나갈수록 커짐
+  const dy = Math.abs(sh.y - ear.y); // 귀는 어깨보다 위
+  const cva = (Math.atan2(dy, dx) * 180) / Math.PI; // 수평 대비 각
+  return { available: true, cvaDeg: round1(cva) };
+}
+
+// ── 오다리 내반각(정면 전용) ── hip–knee–ankle 직선(180°)에서 벗어난 정도. 좌우 평균.
+// 방향(varus/valgus)은 구분하지 않는 "휨 크기" — 소프트 의심 지표로만 사용.
+export type VarusResult = { available: boolean; varusDeg: number };
+export function kneeVarusDeg(lm: Pt[]): VarusResult {
+  if (isSideView(lm)) return { available: false, varusDeg: 0 };
+  const legs: [number, number, number][] = [
+    [LM.LEFT_HIP, LM.LEFT_KNEE, LM.LEFT_ANKLE],
+    [LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
+  ];
+  const devs: number[] = [];
+  for (const [h, k, a] of legs) {
+    if (visible(lm[h]) && visible(lm[k]) && visible(lm[a]))
+      devs.push(180 - jointAngleDeg(lm[h], lm[k], lm[a]));
+  }
+  if (devs.length === 0) return { available: false, varusDeg: 0 };
+  return { available: true, varusDeg: round1(devs.reduce((x, y) => x + y, 0) / devs.length) };
 }

@@ -16,6 +16,12 @@ data/pose/
 *.pth
 *.onnx
 
+# data/ 학습 산출물 전반(대용량·재현 가능) — *.json/*.log 포함.
+# GitHub 100MB 제한 회피(person_keypoints_train2017.json 239MB 등). 벤치마크 입력만 예외.
+data/**/*.json
+data/**/*.log
+!data/benchmark_cases.json
+
 # DB·캐시 (재현 가능 — spec §3)
 data/medgate.db
 data/cache/

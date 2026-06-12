@@ -1,22 +1,14 @@
 // posera 교정운동 코칭 — 운동 정의 + 프레임 판정(순수 함수, 테스트 가능).
 // 측정 결과의 약점(거북목·어깨 기울기 등)을 교정하는 운동을 카메라로 따라하기 체크한다.
-import type { Pt } from "@/lib/golden/score";
-import { LM } from "@/lib/golden/poseConfig";
+import { jointAngleDeg, forwardHeadCvaDeg, type Pt } from "@/lib/golden/score";
+import { LM, POSTURE } from "@/lib/golden/poseConfig";
+
+// 공용 기하는 score.ts 가 소유 — 기존 import 경로(./exercises) 호환 위해 재export.
+export { jointAngleDeg };
 
 const VIS_MIN = 0.5;
 const vis = (p: Pt | undefined): p is Pt =>
   !!p && (p.visibility === undefined || p.visibility >= VIS_MIN);
-
-// 관절 b에서의 a-b-c 각도(도)
-export function jointAngleDeg(a: Pt, b: Pt, c: Pt): number {
-  const v1x = a.x - b.x,
-    v1y = a.y - b.y,
-    v2x = c.x - b.x,
-    v2y = c.y - b.y;
-  const dot = v1x * v2x + v1y * v2y;
-  const m = Math.hypot(v1x, v1y) * Math.hypot(v2x, v2y) || 1e-6;
-  return (Math.acos(Math.max(-1, Math.min(1, dot / m))) * 180) / Math.PI;
-}
 
 export type Phase = string;
 export type EvalResult = {
@@ -129,20 +121,100 @@ export const EXERCISES: Exercise[] = [
       };
     },
   },
+  {
+    id: "chin-tuck",
+    name: "턱 당기기",
+    emoji: "🙂",
+    helps: "거북목(전방두부)",
+    mode: "rep",
+    reps: 10,
+    instructions: "옆으로 서서, 턱을 뒤로 당겨 귀가 어깨 위에 오게 했다 풉니다.",
+    evaluate(lm) {
+      const cva = forwardHeadCvaDeg(lm);
+      if (!cva.available)
+        return { ok: false, inPosition: false, feedback: "옆모습이 보이게 서주세요" };
+      const tucked = cva.cvaDeg >= POSTURE.CVA_FHP_DEG;
+      const released = cva.cvaDeg < POSTURE.CVA_FHP_DEG - 6;
+      return {
+        ok: true,
+        inPosition: tucked,
+        released,
+        feedback: tucked ? "좋아요, 귀가 어깨 위!" : "턱을 더 뒤로 당기세요",
+      };
+    },
+  },
+  {
+    id: "hip-abduction",
+    name: "옆으로 다리 들기",
+    emoji: "🦵",
+    helps: "오다리·고관절 안정(둔근·외전근)",
+    mode: "rep",
+    reps: 10,
+    instructions: "정면으로 서서 한쪽 다리를 옆으로 들어올렸다 내립니다. 상체는 곧게.",
+    evaluate(lm) {
+      const lHip = lm[LM.LEFT_HIP];
+      const rHip = lm[LM.RIGHT_HIP];
+      const lAnk = lm[LM.LEFT_ANKLE];
+      const rAnk = lm[LM.RIGHT_ANKLE];
+      if (!vis(lHip) || !vis(rHip) || (!vis(lAnk) && !vis(rAnk)))
+        return { ok: false, inPosition: false, feedback: "전신이 보이게 서주세요" };
+      const hipW = Math.abs(lHip.x - rHip.x) + 1e-6;
+      const hipMidX = (lHip.x + rHip.x) / 2;
+      const spread =
+        Math.max(
+          vis(lAnk) ? Math.abs(lAnk.x - hipMidX) : 0,
+          vis(rAnk) ? Math.abs(rAnk.x - hipMidX) : 0,
+        ) / hipW;
+      const up = spread > 1.1; // 발목이 골반폭의 ~1.1배 밖으로
+      const released = spread < 0.7;
+      return {
+        ok: true,
+        inPosition: up,
+        released,
+        feedback: up ? "좋아요!" : "다리를 옆으로 더 드세요",
+      };
+    },
+  },
 ];
 
 export function exerciseById(id: string): Exercise | undefined {
   return EXERCISES.find((e) => e.id === id);
 }
 
-// 측정 약점 → 추천 운동 id (간단 규칙)
-export function recommendExerciseIds(opts: {
+// 측정 약점 → 판정 입력(각도). 임계값은 poseConfig.POSTURE 단일 출처.
+export type PostureInput = {
   headTiltDeg?: number;
   shoulderTiltDeg?: number;
-}): string[] {
+  hipTiltDeg?: number;
+  cvaDeg?: number;
+  cvaAvailable?: boolean;
+  kneeVarusDeg?: number;
+};
+
+// 약점 → 추천 교정운동 id. (측만 의심은 여기 넣지 않음 — assessPosture 의 전문가 플래그로.)
+export function recommendExerciseIds(opts: PostureInput): string[] {
   const ids: string[] = [];
-  if ((opts.headTiltDeg ?? 0) >= 5) ids.push("neck-side-stretch");
-  if ((opts.shoulderTiltDeg ?? 0) >= 4) ids.push("arm-raise");
+  if ((opts.headTiltDeg ?? 0) >= POSTURE.HEAD_TILT_DEG) ids.push("neck-side-stretch");
+  if ((opts.shoulderTiltDeg ?? 0) >= POSTURE.SHOULDER_TILT_DEG) ids.push("arm-raise");
+  if (opts.cvaAvailable && (opts.cvaDeg ?? 90) < POSTURE.CVA_FHP_DEG) ids.push("chin-tuck");
+  if ((opts.kneeVarusDeg ?? 0) >= POSTURE.KNEE_VARUS_DEG) ids.push("hip-abduction");
   if (ids.length === 0) ids.push("arm-raise");
   return ids;
+}
+
+// 종합 판정: 추천운동 + 주의 문구. 측만 의심은 자가운동 단정 금지 →
+// 전문가 평가 우선 소프트 플래그(spec 비진단 원칙·코치 페르소나 규칙).
+export function assessPosture(opts: PostureInput): {
+  exerciseIds: string[];
+  advisories: string[];
+} {
+  const advisories: string[] = [];
+  const lateral = Math.max(opts.shoulderTiltDeg ?? 0, opts.hipTiltDeg ?? 0);
+  if (lateral >= POSTURE.LATERAL_ASYM_DEG)
+    advisories.push(
+      `좌우 높이차 ${Math.round(lateral)}° — 측만 가능성이 시사됩니다. 자가 교정보다 전문가(정형외과/도수치료) 평가를 먼저 권합니다.`,
+    );
+  if (opts.cvaAvailable === false)
+    advisories.push("거북목(CVA)은 옆모습으로 서면 측정됩니다.");
+  return { exerciseIds: recommendExerciseIds(opts), advisories };
 }
