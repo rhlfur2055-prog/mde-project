@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPoseRuntime, type PoseRuntime } from "@/lib/pose/poseLandmarker";
+import { computeBodyMetrics, type BodyMetrics } from "@/lib/golden/score";
 
 type Status = "idle" | "loading" | "running" | "error";
 
@@ -13,12 +14,14 @@ export default function PoseCamera() {
   const streamRef = useRef<MediaStream | null>(null);
   const lastVideoTimeRef = useRef<number>(-1);
   const fpsRef = useRef<{ last: number; frames: number }>({ last: 0, frames: 0 });
+  const lastMetricsAtRef = useRef<number>(0);
 
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
   const [fps, setFps] = useState(0);
   const [ms, setMs] = useState(0);
   const [detected, setDetected] = useState(false);
+  const [metrics, setMetrics] = useState<BodyMetrics | null>(null);
 
   const stop = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -31,6 +34,7 @@ export default function PoseCamera() {
     setFps(0);
     setMs(0);
     setDetected(false);
+    setMetrics(null);
   }, []);
 
   const loop = useCallback(() => {
@@ -58,6 +62,11 @@ export default function PoseCamera() {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const drawingUtils = new runtime.mp.DrawingUtils(ctx);
         setDetected(result.landmarks.length > 0);
+        // 점수는 ~5fps로 갱신(화면 떨림 방지) — P3 황금비율 엔진
+        if (result.landmarks.length > 0 && t1 - lastMetricsAtRef.current >= 200) {
+          lastMetricsAtRef.current = t1;
+          setMetrics(computeBodyMetrics(result.landmarks[0]));
+        }
         for (const landmarks of result.landmarks) {
           drawingUtils.drawConnectors(
             landmarks,
@@ -152,6 +161,57 @@ export default function PoseCamera() {
           </button>
         )}
       </div>
+
+      {metrics && (
+        <div className="w-full rounded-xl border border-zinc-300 p-4 dark:border-zinc-700">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-zinc-500">종합 자세 점수</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold tabular-nums text-black dark:text-zinc-50">
+                {metrics.overall.score}
+              </span>
+              <span className="rounded-md bg-foreground px-2 py-0.5 text-sm font-semibold text-background">
+                {metrics.overall.grade}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800">
+              <div className="flex justify-between">
+                <span className="text-zinc-500">좌우 대칭</span>
+                <span className="font-semibold tabular-nums">
+                  {metrics.symmetry.available ? metrics.symmetry.score : "—"}
+                </span>
+              </div>
+              <div className="mt-1 font-mono text-xs text-zinc-500">
+                어깨 {metrics.symmetry.shoulderTiltDeg}° · 골반{" "}
+                {metrics.symmetry.hipTiltDeg}° · 머리 {metrics.symmetry.headTiltDeg}°
+              </div>
+            </div>
+            <div className="rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800">
+              <div className="flex justify-between">
+                <span className="text-zinc-500">황금비(φ)</span>
+                <span className="font-semibold tabular-nums">
+                  {metrics.golden.available ? metrics.golden.score : "—"}
+                </span>
+              </div>
+              <div className="mt-1 font-mono text-xs text-zinc-500">
+                하체:상체 {metrics.golden.available ? metrics.golden.lowerUpperRatio : "—"}{" "}
+                / 목표 {metrics.golden.phi}
+              </div>
+            </div>
+          </div>
+
+          {metrics.deviations.length > 0 && (
+            <ul className="mt-3 space-y-1 text-xs text-amber-700 dark:text-amber-400">
+              {metrics.deviations.map((d, i) => (
+                <li key={i}>• {d}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {error && (
         <p className="w-full rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
