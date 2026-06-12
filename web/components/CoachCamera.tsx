@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPoseRuntime, type PoseRuntime } from "@/lib/pose/poseLandmarker";
 import type { Exercise } from "@/lib/exercise/exercises";
+import ExerciseDemo from "@/components/ExerciseDemo";
 
 type Status = "idle" | "loading" | "running" | "error";
 
@@ -176,6 +177,16 @@ export default function CoachCamera({
         </span>
       </div>
 
+      {/* 시범 — "이렇게 하세요" */}
+      <div className="flex w-full items-center gap-4 rounded-xl border border-zinc-300 p-3 dark:border-zinc-700">
+        <ExerciseDemo exerciseId={exercise.id} />
+        <div className="text-sm text-zinc-600 dark:text-zinc-300">
+          <p className="mb-1 font-medium text-black dark:text-zinc-50">이렇게 하세요 (시범)</p>
+          <p>{exercise.instructions}</p>
+          <p className="mt-2 text-xs text-zinc-400">교정: {exercise.helps}</p>
+        </div>
+      </div>
+
       <div className="relative w-full overflow-hidden rounded-xl border border-zinc-300 bg-zinc-900 dark:border-zinc-700">
         <canvas ref={canvasRef} className="block h-auto w-full" />
         {status !== "running" && (
@@ -204,11 +215,6 @@ export default function CoachCamera({
         )}
       </div>
       <video ref={videoRef} className="hidden" playsInline muted />
-
-      <p className="w-full text-sm text-zinc-600 dark:text-zinc-400">
-        {exercise.instructions}
-        <span className="ml-2 text-xs text-zinc-400">교정: {exercise.helps}</span>
-      </p>
 
       <div className="flex w-full items-center justify-end gap-2">
         {done && (
