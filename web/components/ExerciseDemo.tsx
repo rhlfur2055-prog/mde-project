@@ -102,19 +102,21 @@ export default function ExerciseDemo({
   const cls = "h-[300px] w-[240px] rounded-lg bg-zinc-100 object-contain dark:bg-zinc-800";
 
   if (tier === "video") {
-    // 투명 webm(배경 제거본) 우선, 없으면 mp4. 배경 박스 없이 캐릭터만.
+    // mp4 직접 재생(배경 박스 없이). 없으면 gif→마네킹으로 폴백.
     return (
       <video
+        src={`${base}.mp4`}
         autoPlay
         loop
         muted
         playsInline
+        onLoadedMetadata={(e) => {
+          // 병원용 — 동작을 천천히 보여줌(0.6배)
+          e.currentTarget.playbackRate = 0.6;
+        }}
         onError={() => setTier("gif")}
         className="h-[300px] w-[240px] object-contain"
-      >
-        <source src={`${base}.webm`} type="video/webm" />
-        <source src={`${base}.mp4`} type="video/mp4" />
-      </video>
+      />
     );
   }
   if (tier === "gif") {

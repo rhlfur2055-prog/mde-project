@@ -34,12 +34,14 @@ if (!out) {
   console.error("--out <경로> 필요");
   process.exit(1);
 }
-if (!process.env.REPLICATE_API_TOKEN) {
-  console.error("REPLICATE_API_TOKEN 없음 — web/.env.local 에 추가하세요");
+const token =
+  process.env.REPLICATE_API_TOKEN || process.env.replicate_api_token;
+if (!token) {
+  console.error("REPLICATE 토큰 없음 — .env 에 REPLICATE_API_TOKEN=r8_... 추가");
   process.exit(1);
 }
 
-const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN });
+const replicate = new Replicate({ auth: token });
 
 console.log(`[gen] model = ${model}`);
 console.log(`[gen] prompt = ${prompt.slice(0, 90)}...`);
