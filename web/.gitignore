@@ -37,6 +37,9 @@ yarn-error.log*
 # 라이선스 운동 GIF(Gym Visual 등) — 재배포 금지, 커밋 제외
 public/exercises/*.gif
 
+# 3D 모델(데모/대용량) — 재다운로드 가능, 커밋 제외
+public/models/*.glb
+
 # vercel
 .vercel
 
