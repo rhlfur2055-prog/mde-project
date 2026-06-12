@@ -47,7 +47,9 @@ class MuraDataset(Dataset):
                  max_per_class: Optional[int] = None) -> None:
         self.root = pathlib.Path(root)
         self.transform = transform
-        imgs = sorted(p for p in self.root.rglob("*") if p.suffix.lower() in IMG_EXT)
+        # macOS AppleDouble 잔재(._*)·숨김 파일 제외 — PIL이 못 여는 정크 (실 MURA에 섞여 있음)
+        imgs = sorted(p for p in self.root.rglob("*")
+                      if p.suffix.lower() in IMG_EXT and not p.name.startswith("."))
 
         marker = [(p, label_from_path(p)) for p in imgs]
         if imgs and all(lbl is not None for _, lbl in marker):
