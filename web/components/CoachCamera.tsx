@@ -9,7 +9,7 @@ type Status = "idle" | "loading" | "running" | "error";
 
 export default function CoachCamera({
   exercise,
-  gender = "male",
+  gender = "man",
   onExit,
 }: {
   exercise: Exercise;

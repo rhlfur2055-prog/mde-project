@@ -46,3 +46,6 @@ public/models/*.glb
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+public/exercises/*.mp4
+public/exercises/**/*.mp4
+public/exercises/**/*.gif

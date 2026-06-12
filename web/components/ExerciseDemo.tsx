@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DEMO_CONNECTIONS, poseAt } from "@/lib/exercise/demos";
 
-export type Gender = "male" | "female";
+export type Gender = "man" | "woman";
 
 // 운동 시범 — 3단 폴백:
 //  ① public/exercises/{id}-{gender}.mp4 (영상, 표본)
@@ -11,12 +11,13 @@ export type Gender = "male" | "female";
 //  ③ 우리 마네킹 캐릭터(코드, 무료)
 export default function ExerciseDemo({
   exerciseId,
-  gender = "male",
+  gender = "man",
 }: {
   exerciseId: string;
   gender?: Gender;
 }) {
-  const base = `/exercises/${exerciseId}-${gender}`;
+  // 네가 둔 형식 그대로: exercises/{운동}/{운동}-{man|woman}.mp4
+  const base = `/exercises/${exerciseId}/${exerciseId}-${gender}`;
   const [tier, setTier] = useState<"video" | "gif" | "avatar">("video");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);

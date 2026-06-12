@@ -8,7 +8,7 @@ import type { Gender } from "@/components/ExerciseDemo";
 
 export default function CoachPage() {
   const [selected, setSelected] = useState<string | null>(null);
-  const [gender, setGender] = useState<Gender>("male");
+  const [gender, setGender] = useState<Gender>("man");
   const ex = selected ? exerciseById(selected) : null;
 
   return (
@@ -24,7 +24,7 @@ export default function CoachPage() {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex overflow-hidden rounded-full border border-zinc-300 text-sm dark:border-zinc-700">
-            {(["male", "female"] as Gender[]).map((g) => (
+            {(["man", "woman"] as Gender[]).map((g) => (
               <button
                 key={g}
                 onClick={() => setGender(g)}
@@ -34,7 +34,7 @@ export default function CoachPage() {
                     : "text-zinc-600 dark:text-zinc-300"
                 }`}
               >
-                {g === "male" ? "남" : "여"}
+                {g === "man" ? "남" : "여"}
               </button>
             ))}
           </div>
