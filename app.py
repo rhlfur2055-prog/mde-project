@@ -123,17 +123,19 @@ def _render_card(label: str, confidence: float, elapsed_ms: float,
     c3.metric("처리 시간", f"{elapsed_ms:.0f} ms")
     note = "저장된 결과(재추론 없음)" if cached else "신규 추론"
     if top_finding:
-        st.caption(f"최다 활성 소견(흉부 모델): {top_finding} · {note}")
+        st.caption(f"주요 소견: {top_finding} · {note}")
     else:
         st.caption(note)
 
 
 def page_analyze() -> None:
     st.header("② 분석 — AI 판정")
-    st.warning(
-        "현재 흉부 학습 모델(TorchXRayVision)로 파이프라인 검증 중 — "
-        "근골격 모델(MURA 파인튜닝, D7)로 교체 예정."
-    )
+    _mdl = infer.active_model_name()
+    if _mdl.startswith("mura"):
+        st.success(f"근골격 모델 적용: **{_mdl}** (MURA 파인튜닝 — D7 채택 완료)")
+    elif _mdl != infer.LABEL_NO_MODEL:
+        st.warning("현재 흉부 베이스라인(TorchXRayVision) — 근골격 MURA 모델 미탑재. "
+                   "data/mura_model.pt 채택 시 자동 전환(D7).")
     store = get_store()
     studies = store.list_studies()
     if not studies:
@@ -231,7 +233,7 @@ def _render_detail(store: Store, sid: int) -> None:
         c2.metric("확신도", f"{(d['verdict_conf'] or 0) * 100:.1f}%")
         c3.metric("처리 시간", f"{d['verdict_ms'] or 0:.0f} ms")
         if d["verdict_top"]:
-            st.caption(f"최다 활성 소견(흉부 모델): {d['verdict_top']} · 모델 {d['verdict_model']}")
+            st.caption(f"주요 소견: {d['verdict_top']} · 모델 {d['verdict_model']}")
         _render_report_section(sid, d)
     else:
         st.info("미분석 — ② 분석에서 [분석 시작]을 실행하세요.")

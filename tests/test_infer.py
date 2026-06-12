@@ -10,6 +10,17 @@ from pydicom.data import get_testdata_file
 from core import deid, dicom_io, infer, preprocess
 
 
+@pytest.fixture(autouse=True)
+def _disable_mura(monkeypatch):
+    """이 모듈은 흉부 베이스라인 경로 검증 — 로컬 data/mura_model.pt가 있어도 MURA 비활성화."""
+    monkeypatch.setenv("MURA_MODEL", "data/__none_for_infer_test__.pt")
+    infer._mura_attempted = False
+    infer._mura_model = None
+    yield
+    infer._mura_attempted = False
+    infer._mura_model = None
+
+
 def test_aggregate_abnormal_when_high_score():
     res = infer._aggregate({"Pneumonia": 0.9, "Effusion": 0.1, "": 0.99})
     assert res["label"] == infer.LABEL_ABNORMAL

@@ -104,6 +104,15 @@ def is_available() -> bool:
     return _get_mura_model() is not None or _get_model() is not None
 
 
+def active_model_name() -> str:
+    """현재 추론에 쓰일 모델 이름 — MURA(근골격) > 흉부 베이스라인 > 모델 없음."""
+    if _get_mura_model() is not None:
+        return f"mura-{MURA_ARCH}"
+    if _get_model() is not None:
+        return WEIGHTS
+    return LABEL_NO_MODEL
+
+
 def _to_model_input(img: np.ndarray):
     """그레이/컬러 이미지를 xrv 입력 텐서 (1,1,224,224)로 변환."""
     import torch

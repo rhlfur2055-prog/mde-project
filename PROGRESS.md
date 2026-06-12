@@ -59,3 +59,7 @@
 ## D7 실데이터 실행 (MURA-v1.1_files 3.3GB, gitignore됨)
 - [환경] torch 2.12.0+**cpu** — CUDA 미사용(내가 CPU 휠 설치). 실데이터 풀학습은 GPU 필요 → CPU 빠른 검증(소표본·소epoch)으로 실증, 풀학습은 사람이 GPU에서.
 - [D7-1 로더 검증] mura_dataset.py 실 MURA 구조(study*_positive/negative) 파싱 확인 + max_per_class 추가. 검증: XR_WRIST train 9756장(정상5769/비정상3987), **train_labeled_studies.csv와 100% 일치(불일치 0)**. 기존 단위 3 passed.
+- [D7-2 학습] train_mura.py: resnet 지원·증강·--quick. XR_WRIST 실데이터 후보 3종 학습(ImageNet 사전학습, 클래스당120·2epoch, CPU). loss 감소 확인: densenet121 0.77→0.13, resnet50 0.73→0.07, densenet169 0.73→0.12. .pt 3개 저장(gitignore).
+- [D7-3 영상아레나] evaluate_mura.py로 valid XR_WRIST 200장(의사 정답) 채점 → 리더보드(정확도순) data/mura_leaderboard.json 저장. **1등 densenet169 acc=0.80(sens0.74/spec0.86)** > resnet50 0.745 > densenet121 0.67. CPU 빠른검증이라 절대값 낮음 — 신호 확인용, GPU 풀학습 시 향상(동일 코드). 가짜 부풀림 없음.
+- [D7-4 채택] densenet169.pt → data/mura_model.pt 채택. infer.active_model_name()=mura-densenet169, 실 positive 손목 이미지 추론=이상 소견 의심(model=mura-densenet169) — 흉부 폴백 아님 확인. 화면② 한계 문구 제거(MURA 적용 success 문구), _render_card/_detail 캡션 흉부 표현 제거. AppTest로 화면② MURA 문구 검증. 전체 61 passed.
+- [D7 완료] CPU 빠른검증 완주(사용자 결정). torch CPU 전용 확정. RAG·temperature 미사용(순수 CNN). 풀학습(GPU)은 동일 코드로 데이터·epoch만 확대.

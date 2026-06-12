@@ -29,3 +29,4 @@ outputs/
 # MURA 실데이터 (3.3GB — 절대 커밋 금지, 사람이 다운로드)
 MURA-v1.1_files/
 MURA-v1.1/
+data/mura_leaderboard.json

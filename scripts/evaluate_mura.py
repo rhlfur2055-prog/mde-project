@@ -55,9 +55,18 @@ def evaluate_model(model: torch.nn.Module, dl: DataLoader, device: str = "cpu") 
     }
 
 
+def _arch_from_name(path: str, default: str) -> str:
+    """파일명 stem(예: densenet121.pt, resnet50__aug.pt)에서 arch 추출."""
+    import torchvision.models as m
+    stem = os.path.splitext(os.path.basename(path))[0].split("__")[0]
+    return stem if hasattr(m, stem) else default
+
+
 def evaluate(models_dir: str, data_dir: str, arch: str = "densenet169",
-             device: str = "cpu", batch: int = 8) -> list[dict]:
-    ds = MuraDataset(data_dir, transform=build_transform())
+             device: str = "cpu", batch: int = 8,
+             max_per_class: "int | None" = None,
+             out: "str | None" = None) -> list[dict]:
+    ds = MuraDataset(data_dir, transform=build_transform(), max_per_class=max_per_class)
     if len(ds) == 0:
         raise SystemExit(f"테스트 데이터 없음: {data_dir}")
     dl = DataLoader(ds, batch_size=batch)
@@ -67,8 +76,10 @@ def evaluate(models_dir: str, data_dir: str, arch: str = "densenet169",
 
     rows = []
     for p in paths:
-        met = evaluate_model(load_model(p, arch), dl, device)
+        model_arch = _arch_from_name(p, arch)
+        met = evaluate_model(load_model(p, model_arch), dl, device)
         met["model"] = os.path.basename(p)
+        met["arch"] = model_arch
         rows.append(met)
         print(f"  평가 {met['model']}: acc={met['accuracy']} sens={met['sensitivity']} "
               f"spec={met['specificity']} n={met['n']}", flush=True)
@@ -76,8 +87,16 @@ def evaluate(models_dir: str, data_dir: str, arch: str = "densenet169",
     rows.sort(key=lambda r: r["accuracy"], reverse=True)
     print("=== 영상 아레나 리더보드 (정확도순) ===")
     for i, r in enumerate(rows, 1):
-        print(f"  {i}. {r['model']}  acc={r['accuracy']} sens={r['sensitivity']} spec={r['specificity']}")
+        print(f"  {i}. {r['model']} ({r.get('arch','?')})  acc={r['accuracy']} "
+              f"sens={r['sensitivity']} spec={r['specificity']}")
     print(f"채택 후보(1등): {rows[0]['model']} → infer.py MURA_MODEL 로 지정")
+    if out:
+        import json
+        os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump({"data_dir": data_dir, "max_per_class": max_per_class,
+                       "leaderboard": rows, "winner": rows[0]}, f, ensure_ascii=False, indent=2)
+        print(f"리더보드 저장: {out}", flush=True)
     return rows
 
 
@@ -85,10 +104,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", required=True, help="평가할 .pt 모델들이 있는 폴더")
     ap.add_argument("--data", required=True, help="MURA 테스트셋(정답 라벨) 폴더")
-    ap.add_argument("--arch", default="densenet169")
+    ap.add_argument("--arch", default="densenet169", help="파일명에서 못 찾을 때 기본 arch")
+    ap.add_argument("--max-per-class", type=int, default=None, dest="max_per_class")
+    ap.add_argument("--out", default=None, help="리더보드 JSON 저장 경로")
     ap.add_argument("--device", default="cpu")
     a = ap.parse_args()
-    evaluate(a.models, a.data, a.arch, a.device)
+    evaluate(a.models, a.data, a.arch, a.device, max_per_class=a.max_per_class, out=a.out)
 
 
 if __name__ == "__main__":

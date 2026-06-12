@@ -37,4 +37,14 @@ def test_uses_mura_when_weights_present(tmp_path, monkeypatch):
     assert out["model"] == "mura-densenet169"        # MURA 경로 사용
     assert out["label"] in (infer.LABEL_ABNORMAL, infer.LABEL_NORMAL)  # 인터페이스 불변
     assert 0.0 <= out["confidence"] <= 1.0
+    assert infer.active_model_name() == "mura-densenet169"  # 화면②가 읽는 활성 모델명
+    _reset_mura()
+
+
+def test_active_model_name_falls_back_without_mura(monkeypatch):
+    _reset_mura()
+    monkeypatch.setenv("MURA_MODEL", "data/__no_mura_here__.pt")
+    name = infer.active_model_name()
+    assert name in (infer.WEIGHTS, infer.LABEL_NO_MODEL)   # 흉부 또는 모델 없음
+    assert not name.startswith("mura")
     _reset_mura()

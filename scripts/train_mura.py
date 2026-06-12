@@ -25,23 +25,32 @@ NUM_CLASSES = 2  # 0=정상, 1=비정상
 
 
 def build_model(arch: str = "densenet169", pretrained: bool = False) -> nn.Module:
-    """DenseNet 백본 + 2-class 분류 헤드 (MURA 이진분류)."""
+    """백본 + 2-class 분류 헤드 (MURA 이진분류). densenet*/resnet* 지원."""
     weights = "IMAGENET1K_V1" if pretrained else None
-    factory = getattr(models, arch)
-    model = factory(weights=weights)
-    model.classifier = nn.Linear(model.classifier.in_features, NUM_CLASSES)
+    model = getattr(models, arch)(weights=weights)
+    if hasattr(model, "classifier") and isinstance(model.classifier, nn.Linear):
+        model.classifier = nn.Linear(model.classifier.in_features, NUM_CLASSES)  # densenet
+    elif hasattr(model, "fc") and isinstance(model.fc, nn.Linear):
+        model.fc = nn.Linear(model.fc.in_features, NUM_CLASSES)                  # resnet
+    else:
+        raise SystemExit(f"지원하지 않는 arch 헤드 구조: {arch}")
     return model
 
 
-def build_transform() -> T.Compose:
-    # 실학습 시 ImageNet 정규화·증강 추가 권장. 골격은 Resize+ToTensor만.
-    return T.Compose([T.Resize((224, 224)), T.ToTensor()])
+def build_transform(augment: bool = False) -> T.Compose:
+    # ImageNet 정규화 + (옵션) 증강. MURA 논문식 좌우반전·회전.
+    norm = T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    if augment:
+        return T.Compose([T.Resize((224, 224)), T.RandomHorizontalFlip(),
+                          T.RandomRotation(15), T.ToTensor(), norm])
+    return T.Compose([T.Resize((224, 224)), T.ToTensor(), norm])
 
 
 def train(data_dir: str, epochs: int = 3, steps: int | None = None, batch: int = 8,
           lr: float = 1e-4, arch: str = "densenet169", pretrained: bool = False,
-          out: str = "data/mura_model.pt", device: str = "cpu") -> dict:
-    ds = MuraDataset(data_dir, transform=build_transform())
+          out: str = "data/mura_model.pt", device: str = "cpu",
+          max_per_class: int | None = None, augment: bool = False) -> dict:
+    ds = MuraDataset(data_dir, transform=build_transform(augment), max_per_class=max_per_class)
     if len(ds) == 0:
         raise SystemExit(f"데이터 없음: {data_dir} 에 이미지가 없습니다.")
     dl = DataLoader(ds, batch_size=batch, shuffle=True)
@@ -68,7 +77,7 @@ def train(data_dir: str, epochs: int = 3, steps: int | None = None, batch: int =
 
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     torch.save(model.state_dict(), out)
-    print(f"saved {out} (samples={len(ds)}, steps={done}, arch={arch})", flush=True)
+    print(f"saved {out} (samples={len(ds)}, steps={done}, arch={arch}, augment={augment})", flush=True)
     return {"out": out, "samples": len(ds), "steps": done, "arch": arch}
 
 
@@ -81,13 +90,23 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=1e-4)
     ap.add_argument("--arch", default="densenet169")
     ap.add_argument("--pretrained", action="store_true", help="ImageNet 초기화(다운로드)")
+    ap.add_argument("--augment", action="store_true", help="데이터 증강(좌우반전·회전)")
+    ap.add_argument("--max-per-class", type=int, default=None, dest="max_per_class",
+                    help="클래스당 표본 제한(CPU 빠른 검증)")
+    ap.add_argument("--quick", action="store_true",
+                    help="빠른 검증: max-per-class=100, epochs=2 기본")
     ap.add_argument("--out", default="data/mura_model.pt")
     ap.add_argument("--device", default="cpu")
     a = ap.parse_args()
     if not a.data:
         raise SystemExit("--data <MURA폴더> 또는 MURA_DIR 환경변수 필요")
-    train(a.data, a.epochs, a.steps, a.batch, a.lr,
-          a.arch, a.pretrained, a.out, a.device)
+    mpc = a.max_per_class
+    epochs = a.epochs
+    if a.quick:
+        mpc = mpc or 100
+        epochs = min(epochs, 2)
+    train(a.data, epochs, a.steps, a.batch, a.lr, a.arch, a.pretrained,
+          a.out, a.device, max_per_class=mpc, augment=a.augment)
 
 
 if __name__ == "__main__":
