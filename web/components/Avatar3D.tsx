@@ -10,7 +10,8 @@ function Model({ url }: { url: string }) {
   const { actions, names } = useAnimations(animations, scene);
 
   useEffect(() => {
-    const name = names.find((n) => /idle|walk/i.test(n)) ?? names[0];
+    // 가만히 서있는 동작 우선(걷기는 등 보임)
+    const name = names.find((n) => /idle/i.test(n)) ?? names[0];
     const action = name ? actions[name] : undefined;
     action?.reset().fadeIn(0.3).play();
     return () => {
@@ -18,7 +19,15 @@ function Model({ url }: { url: string }) {
     };
   }, [actions, names]);
 
-  return <primitive object={scene} scale={1.4} position={[0, -1.4, 0]} />;
+  // 카메라 쪽(앞)을 보도록 180° 회전
+  return (
+    <primitive
+      object={scene}
+      scale={1.4}
+      position={[0, -1.4, 0]}
+      rotation={[0, Math.PI, 0]}
+    />
+  );
 }
 
 export default function Avatar3D({ url }: { url: string }) {
