@@ -9,6 +9,8 @@ import {
 } from "@/lib/pose/personDetector";
 import { YOLO_CONFIG } from "@/lib/pose/config";
 import { computeBodyMetrics, type BodyMetrics } from "@/lib/golden/score";
+import { saveScan } from "@/lib/supabase/scans";
+import Link from "next/link";
 
 type Status = "idle" | "loading" | "running" | "error";
 
@@ -21,6 +23,7 @@ export default function PoseCamera() {
   const lastVideoTimeRef = useRef<number>(-1);
   const fpsRef = useRef<{ last: number; frames: number }>({ last: 0, frames: 0 });
   const lastMetricsAtRef = useRef<number>(0);
+  const lastLandmarksRef = useRef<unknown>(null);
   // YOLO 사람검출(온디바이스, 자세추정과 분리)
   const detectorRef = useRef<PersonDetector | null>(null);
   const detectorLoadingRef = useRef(false);
@@ -35,6 +38,8 @@ export default function PoseCamera() {
   const [detected, setDetected] = useState(false);
   const [personScore, setPersonScore] = useState(0);
   const [metrics, setMetrics] = useState<BodyMetrics | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
 
   const stop = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -83,6 +88,7 @@ export default function PoseCamera() {
         // 점수는 ~5fps로 갱신(화면 떨림 방지) — P3 황금비율 엔진
         if (result.landmarks.length > 0 && t1 - lastMetricsAtRef.current >= 200) {
           lastMetricsAtRef.current = t1;
+          lastLandmarksRef.current = result.landmarks[0];
           setMetrics(computeBodyMetrics(result.landmarks[0]));
         }
         for (const landmarks of result.landmarks) {
@@ -185,6 +191,20 @@ export default function PoseCamera() {
     }
   }, [loop]);
 
+  const onSave = useCallback(async () => {
+    if (!metrics) return;
+    try {
+      setSaving(true);
+      setSaveMsg("");
+      await saveScan(metrics, lastLandmarksRef.current ?? []);
+      setSaveMsg("저장됨 ✓");
+    } catch (e) {
+      setSaveMsg("저장 실패: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setSaving(false);
+    }
+  }, [metrics]);
+
   // 언마운트 시 정리
   useEffect(() => stop, [stop]);
 
@@ -282,6 +302,25 @@ export default function PoseCamera() {
               ))}
             </ul>
           )}
+
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <span className="text-xs text-zinc-500">{saveMsg}</span>
+            <div className="flex gap-2">
+              <Link
+                href="/progress"
+                className="rounded-full border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-black/4 dark:border-zinc-700 dark:text-zinc-200"
+              >
+                진척 보기
+              </Link>
+              <button
+                onClick={onSave}
+                disabled={saving}
+                className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:opacity-50"
+              >
+                {saving ? "저장 중…" : "이 측정 저장"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
