@@ -34,6 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# 라이선스 운동 GIF(Gym Visual 등) — 재배포 금지, 커밋 제외
+public/exercises/*.gif
+
 # vercel
 .vercel
 

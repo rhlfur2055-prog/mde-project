@@ -4,9 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { EXERCISES, exerciseById } from "@/lib/exercise/exercises";
 import CoachCamera from "@/components/CoachCamera";
+import type { Gender } from "@/components/ExerciseDemo";
 
 export default function CoachPage() {
   const [selected, setSelected] = useState<string | null>(null);
+  const [gender, setGender] = useState<Gender>("male");
   const ex = selected ? exerciseById(selected) : null;
 
   return (
@@ -20,16 +22,33 @@ export default function CoachPage() {
             카메라가 자세를 보며 횟수·유지시간을 직접 체크합니다.
           </p>
         </div>
-        <Link
-          href="/capture"
-          className="rounded-full border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-black/4 dark:border-zinc-700 dark:text-zinc-200"
-        >
-          측정으로
-        </Link>
+        <div className="flex items-center gap-2">
+          <div className="flex overflow-hidden rounded-full border border-zinc-300 text-sm dark:border-zinc-700">
+            {(["male", "female"] as Gender[]).map((g) => (
+              <button
+                key={g}
+                onClick={() => setGender(g)}
+                className={`px-3 py-1.5 ${
+                  gender === g
+                    ? "bg-foreground text-background"
+                    : "text-zinc-600 dark:text-zinc-300"
+                }`}
+              >
+                {g === "male" ? "남" : "여"}
+              </button>
+            ))}
+          </div>
+          <Link
+            href="/capture"
+            className="rounded-full border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-black/4 dark:border-zinc-700 dark:text-zinc-200"
+          >
+            측정으로
+          </Link>
+        </div>
       </header>
 
       {ex ? (
-        <CoachCamera exercise={ex} onExit={() => setSelected(null)} />
+        <CoachCamera exercise={ex} gender={gender} onExit={() => setSelected(null)} />
       ) : (
         <ul className="grid w-full max-w-2xl gap-3 sm:grid-cols-2">
           {EXERCISES.map((e) => (

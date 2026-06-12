@@ -1,20 +1,38 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DEMO_CONNECTIONS, poseAt } from "@/lib/exercise/demos";
 
-// 운동 시범 아바타 — 키프레임을 보간해 반복 재생하는 스틱피겨(카메라 불필요).
-export default function ExerciseDemo({ exerciseId }: { exerciseId: string }) {
+export type Gender = "male" | "female";
+
+// 운동 시범. public/exercises/{id}-{gender}.gif 가 있으면 그 GIF(Gym Visual 등 라이선스
+// 자산)를 보여주고, 없으면 우리 스틱피겨 애니메이션으로 폴백한다.
+export default function ExerciseDemo({
+  exerciseId,
+  gender = "male",
+}: {
+  exerciseId: string;
+  gender?: Gender;
+}) {
+  const gifSrc = `/exercises/${exerciseId}-${gender}.gif`;
+  const [gifOk, setGifOk] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const startRef = useRef<number>(0);
 
+  // 운동/성별 바뀌면 GIF 다시 시도
   useEffect(() => {
+    setGifOk(true);
+  }, [exerciseId, gender]);
+
+  // 폴백 스틱피겨(=GIF 실패 시에만 그림)
+  useEffect(() => {
+    if (gifOk) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
+    startRef.current = 0;
     const draw = (ts: number) => {
       if (!startRef.current) startRef.current = ts;
       const p = poseAt(exerciseId, ts - startRef.current);
@@ -23,7 +41,6 @@ export default function ExerciseDemo({ exerciseId }: { exerciseId: string }) {
       if (p) {
         const X = (v: number) => v * w;
         const Y = (v: number) => v * h;
-        // 뼈대
         ctx.strokeStyle = "#a3e635";
         ctx.lineWidth = 4;
         ctx.lineCap = "round";
@@ -33,24 +50,35 @@ export default function ExerciseDemo({ exerciseId }: { exerciseId: string }) {
           ctx.lineTo(X(p[b][0]), Y(p[b][1]));
           ctx.stroke();
         }
-        // 관절점
         ctx.fillStyle = "#22d3ee";
         for (const k of Object.keys(p) as (keyof typeof p)[]) {
           ctx.beginPath();
           ctx.arc(X(p[k][0]), Y(p[k][1]), 4, 0, Math.PI * 2);
           ctx.fill();
         }
-        // 머리 원
         ctx.beginPath();
         ctx.arc(X(p.head[0]), Y(p.head[1]), 12, 0, Math.PI * 2);
-        ctx.fillStyle = "#22d3ee";
         ctx.fill();
       }
       rafRef.current = requestAnimationFrame(draw);
     };
     rafRef.current = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [exerciseId]);
+  }, [gifOk, exerciseId]);
+
+  if (gifOk) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return (
+      <img
+        src={gifSrc}
+        alt="운동 시범"
+        width={240}
+        height={300}
+        onError={() => setGifOk(false)}
+        className="h-[300px] w-[240px] rounded-lg bg-zinc-100 object-contain dark:bg-zinc-800"
+      />
+    );
+  }
 
   return (
     <canvas
