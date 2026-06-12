@@ -63,3 +63,31 @@
 - [D7-3 영상아레나] evaluate_mura.py로 valid XR_WRIST 200장(의사 정답) 채점 → 리더보드(정확도순) data/mura_leaderboard.json 저장. **1등 densenet169 acc=0.80(sens0.74/spec0.86)** > resnet50 0.745 > densenet121 0.67. CPU 빠른검증이라 절대값 낮음 — 신호 확인용, GPU 풀학습 시 향상(동일 코드). 가짜 부풀림 없음.
 - [D7-4 채택] densenet169.pt → data/mura_model.pt 채택. infer.active_model_name()=mura-densenet169, 실 positive 손목 이미지 추론=이상 소견 의심(model=mura-densenet169) — 흉부 폴백 아님 확인. 화면② 한계 문구 제거(MURA 적용 success 문구), _render_card/_detail 캡션 흉부 표현 제거. AppTest로 화면② MURA 문구 검증. 전체 61 passed.
 - [D7 완료] CPU 빠른검증 완주(사용자 결정). torch CPU 전용 확정. RAG·temperature 미사용(순수 CNN). 풀학습(GPU)은 동일 코드로 데이터·epoch만 확대.
+
+---
+
+## posera (피벗) — 자세 지표 확장 ②①⑤ (web/, 미커밋)
+
+> medgate→posera 피벗 후 `web/` Next.js 측 작업. 자세 측정 지표·교정운동 추가. **검증은 Claude가 직접 실행해 기록**(보고 신뢰 아님).
+
+### 추가된 것
+- **② 거북목 보강 — 신규 지표 0**: 기존 `forwardHeadCvaDeg`(CVA) 플래그에 `levator-scapulae-stretch`(견갑거근) 매핑 추가. 심부경부굴곡근=기존 chin-tuck, 상부승모근=기존 neck-side-stretch로 커버됨 → 중복 지표 안 만듦.
+- **① 라운드숄더 — 신규 지표 1**: `score.ts` `shoulderProtractionDeg`(측면 전용, 골반→어깨 전방경사) + `isSideView` 게이트(정면이면 need-side 보류, CVA와 동일 경로 — 2단 캡처 UX 안 만듦). `poseConfig.POSTURE.ROUND_SHOULDER_DEG=22`. 운동 `scapular-retraction`·`pec-stretch`·`lower-trap-raise`. **지표-운동 불일치 정리**: 기존 `arm-raise.helps`가 "라운드숄더"였는데 실제론 좌우 shoulderTilt로 트리거되던 문제 → `helps`를 "어깨 가동성(일반)"로 정정하고 추천 트리거에서 제거(폴백화). 라운드숄더는 전인각으로만 트리거.
+- **⑤ X다리 — 기존 지표 signed 확장**: `kneeVarusDeg` → `{available, varusDeg, valgusDeg}`(무릎이 hip–ankle 중점 기준 바깥=varus, 안쪽=valgus). `POSTURE.KNEE_VALGUS_DEG=6`. valgus→`single-leg-balance`, varus→기존 `hip-abduction` 유지. 정면 게이트.
+- **③ 굽은등 · ④ 골반 전방경사 — 제외**: 랜드마크·근거 부족으로 soft 지표조차 미추가. 가짜 지표 안 만듦.
+
+### 정직한 한계
+- 신규 지표 전부 2D 단일관절점 근사 → 전부 **soft(추천/주의 수준, 단정 아님)**. 측면 지표는 `isSideView` 휴리스틱 의존.
+- 신규 운동 `evaluate`는 프레임 폼체크 근사(임상 판정 아님). 테스트는 기하·임계 경로 검증.
+
+### 검증 (Claude 직접 실행, 2026-06-13)
+- **vitest: 45 passed** (34→45, 신규 11). `npx vitest run` 원문 확인.
+- **next build: ✓ 성공, 9 static pages** (`/`,`/capture`,`/coach`,`/demo3d`,`/progress` 등). TypeScript 통과.
+- `git diff --stat`: score.ts(+62)·exercises.ts(+153)·poseConfig.ts·score.test.ts(+38)·exercises.test.ts(+79)·PoseCamera.tsx(+9).
+- 심볼 실재 확인(grep): `shoulderProtractionDeg`·`varusDeg/valgusDeg`·`ROUND_SHOULDER_DEG:22`·`KNEE_VALGUS_DEG:6`·신규 운동 5종.
+
+### 변경 파일
+`poseConfig.ts`(임계 3 추가) · `score.ts`(protraction 신규 + knee signed) · `exercises.ts`(운동 5종 + 추천 재작성 + arm-raise 정리) · `PoseCamera.tsx`(배선) · `score.test.ts`·`exercises.test.ts`(미러 테스트).
+
+### 커밋
+**안 함** — 사용자 확인 후 직접(요청대로). `.mp4` 운동 시범 영상(squat/arm-raise/neck-side-stretch × 남/여 6개)은 `.gitignore`라 커밋 비대상, 파일은 디스크에 존재.

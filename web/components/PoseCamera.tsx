@@ -11,6 +11,7 @@ import { YOLO_CONFIG } from "@/lib/pose/config";
 import {
   computeBodyMetrics,
   forwardHeadCvaDeg,
+  shoulderProtractionDeg,
   kneeVarusDeg,
   type BodyMetrics,
 } from "@/lib/golden/score";
@@ -104,7 +105,8 @@ export default function PoseCamera() {
           setMetrics(m);
           // 신규 지표(거북목 CVA·오다리 내반) — 측면/정면은 기하로 자동 판별.
           const cva = forwardHeadCvaDeg(lm0);
-          const varus = kneeVarusDeg(lm0);
+          const prot = shoulderProtractionDeg(lm0);
+          const knee = kneeVarusDeg(lm0);
           setAssess(
             assessPosture({
               headTiltDeg: m.symmetry.headTiltDeg,
@@ -112,7 +114,10 @@ export default function PoseCamera() {
               hipTiltDeg: m.symmetry.hipTiltDeg,
               cvaDeg: cva.cvaDeg,
               cvaAvailable: cva.available,
-              kneeVarusDeg: varus.available ? varus.varusDeg : 0,
+              shoulderProtractionDeg: prot.protractionDeg,
+              shoulderProtractionAvailable: prot.available,
+              kneeVarusDeg: knee.available ? knee.varusDeg : 0,
+              kneeValgusDeg: knee.available ? knee.valgusDeg : 0,
             }),
           );
         }

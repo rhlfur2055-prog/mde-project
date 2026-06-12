@@ -192,20 +192,62 @@ export function forwardHeadCvaDeg(lm: Pt[]): CvaResult {
   return { available: true, cvaDeg: round1(cva) };
 }
 
-// ── 오다리 내반각(정면 전용) ── hip–knee–ankle 직선(180°)에서 벗어난 정도. 좌우 평균.
-// 방향(varus/valgus)은 구분하지 않는 "휨 크기" — 소프트 의심 지표로만 사용.
-export type VarusResult = { available: boolean; varusDeg: number };
-export function kneeVarusDeg(lm: Pt[]): VarusResult {
-  if (isSideView(lm)) return { available: false, varusDeg: 0 };
+// ── 라운드숄더(측면 전용) ── 골반→어깨 선이 수직에서 앞으로 기운 각. 클수록 어깨가 말림.
+// 거북목(귀-어깨)과 독립. 단일 어깨점 기반 2D 근사 → 소프트 의심 지표로만 사용.
+export type ProtractionResult = {
+  available: boolean;
+  protractionDeg: number;
+  reason?: "need-side" | "no-landmarks";
+};
+export function shoulderProtractionDeg(lm: Pt[]): ProtractionResult {
+  if (!isSideView(lm)) {
+    const haveSh = visible(lm[LM.LEFT_SHOULDER]) || visible(lm[LM.RIGHT_SHOULDER]);
+    return { available: false, protractionDeg: 0, reason: haveSh ? "need-side" : "no-landmarks" };
+  }
+  const score = (si: number, hi: number) =>
+    (visible(lm[si]) ? (lm[si].visibility ?? 1) : -1) +
+    (visible(lm[hi]) ? (lm[hi].visibility ?? 1) : -1);
+  const useRight =
+    score(LM.RIGHT_SHOULDER, LM.RIGHT_HIP) >= score(LM.LEFT_SHOULDER, LM.LEFT_HIP);
+  const sh = useRight ? lm[LM.RIGHT_SHOULDER] : lm[LM.LEFT_SHOULDER];
+  const hip = useRight ? lm[LM.RIGHT_HIP] : lm[LM.LEFT_HIP];
+  if (!visible(sh) || !visible(hip))
+    return { available: false, protractionDeg: 0, reason: "no-landmarks" };
+  const dx = Math.abs(sh.x - hip.x); // 어깨가 골반보다 앞으로 나갈수록 커짐
+  const dy = Math.abs(sh.y - hip.y) + 1e-6; // 몸통 높이
+  const deg = (Math.atan2(dx, dy) * 180) / Math.PI; // 수직 대비 전방경사
+  return { available: true, protractionDeg: round1(deg) };
+}
+
+// ── 무릎 전두면 편차(정면 전용) ── hip–knee–ankle 직선(180°)에서 벗어난 정도 + 방향.
+// 무릎이 바깥(몸 바깥쪽)으로 휘면 varus(오다리), 안쪽으로 모이면 valgus(X다리). 좌우 평균.
+// 단일 관절점 2D 근사 → 소프트 의심 지표로만 사용.
+export type KneeFrontalResult = { available: boolean; varusDeg: number; valgusDeg: number };
+export function kneeVarusDeg(lm: Pt[]): KneeFrontalResult {
+  if (isSideView(lm)) return { available: false, varusDeg: 0, valgusDeg: 0 };
+  const lHip = lm[LM.LEFT_HIP];
+  const rHip = lm[LM.RIGHT_HIP];
+  if (!visible(lHip) || !visible(rHip)) return { available: false, varusDeg: 0, valgusDeg: 0 };
+  const bodyCenterX = (lHip.x + rHip.x) / 2;
   const legs: [number, number, number][] = [
     [LM.LEFT_HIP, LM.LEFT_KNEE, LM.LEFT_ANKLE],
     [LM.RIGHT_HIP, LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
   ];
-  const devs: number[] = [];
+  const varus: number[] = [];
+  const valgus: number[] = [];
+  let measured = 0;
   for (const [h, k, a] of legs) {
-    if (visible(lm[h]) && visible(lm[k]) && visible(lm[a]))
-      devs.push(180 - jointAngleDeg(lm[h], lm[k], lm[a]));
+    if (!visible(lm[h]) || !visible(lm[k]) || !visible(lm[a])) continue;
+    measured++;
+    const dev = 180 - jointAngleDeg(lm[h], lm[k], lm[a]); // 휨 크기
+    if (dev < 0.5) continue; // 거의 직선 → 방향 분류 안 함(노이즈 방지)
+    // 무릎이 hip–ankle 중점에서 바깥쪽(legSide 방향)이면 varus, 안쪽이면 valgus
+    const offset = lm[k].x - (lm[h].x + lm[a].x) / 2;
+    const legSide = Math.sign(lm[h].x - bodyCenterX) || 1;
+    if (Math.sign(offset) === legSide) varus.push(dev);
+    else valgus.push(dev);
   }
-  if (devs.length === 0) return { available: false, varusDeg: 0 };
-  return { available: true, varusDeg: round1(devs.reduce((x, y) => x + y, 0) / devs.length) };
+  if (measured === 0) return { available: false, varusDeg: 0, valgusDeg: 0 };
+  const avg = (xs: number[]) => (xs.length ? xs.reduce((p, q) => p + q, 0) / xs.length : 0);
+  return { available: true, varusDeg: round1(avg(varus)), valgusDeg: round1(avg(valgus)) };
 }

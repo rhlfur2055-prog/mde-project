@@ -158,17 +158,86 @@ describe("옆으로 다리 들기(hip-abduction)", () => {
   });
 });
 
+describe("신규 운동 evaluate", () => {
+  it("견갑 후인 — 손목이 가슴 높이서 넓게 벌어지면 inPosition", () => {
+    const ex = exerciseById("scapular-retraction")!;
+    const lm = lms({
+      [LM.LEFT_SHOULDER]: { x: 0.4, y: 0.5, visibility: 1 },
+      [LM.RIGHT_SHOULDER]: { x: 0.6, y: 0.5, visibility: 1 },
+      [LM.LEFT_WRIST]: { x: 0.25, y: 0.52, visibility: 1 },
+      [LM.RIGHT_WRIST]: { x: 0.75, y: 0.52, visibility: 1 },
+    });
+    expect(ex.evaluate(lm).inPosition).toBe(true);
+  });
+  it("하부 승모근 Y레이즈 — 양팔 머리 위 Y자면 inPosition", () => {
+    const ex = exerciseById("lower-trap-raise")!;
+    const lm = lms({
+      [LM.LEFT_SHOULDER]: { x: 0.4, y: 0.5, visibility: 1 },
+      [LM.RIGHT_SHOULDER]: { x: 0.6, y: 0.5, visibility: 1 },
+      [LM.LEFT_WRIST]: { x: 0.3, y: 0.35, visibility: 1 },
+      [LM.RIGHT_WRIST]: { x: 0.7, y: 0.35, visibility: 1 },
+    });
+    expect(ex.evaluate(lm).inPosition).toBe(true);
+  });
+  it("흉근 스트레칭 — 팔꿈치 어깨 높이·전완 위면 inPosition", () => {
+    const ex = exerciseById("pec-stretch")!;
+    const lm = lms({
+      [LM.LEFT_SHOULDER]: { x: 0.4, y: 0.5, visibility: 1 },
+      [LM.LEFT_ELBOW]: { x: 0.3, y: 0.5, visibility: 1 },
+      [LM.LEFT_WRIST]: { x: 0.3, y: 0.4, visibility: 1 },
+    });
+    expect(ex.evaluate(lm).inPosition).toBe(true);
+  });
+  it("한 발 균형 — 한 발이 들리면 inPosition", () => {
+    const ex = exerciseById("single-leg-balance")!;
+    const lm = lms({
+      [LM.LEFT_ANKLE]: { x: 0.45, y: 0.9, visibility: 1 },
+      [LM.RIGHT_ANKLE]: { x: 0.5, y: 0.7, visibility: 1 },
+    });
+    expect(ex.evaluate(lm).inPosition).toBe(true);
+  });
+  it("견갑거근 스트레칭 — 머리 기울임+숙임이면 inPosition(right)", () => {
+    const ex = exerciseById("levator-scapulae-stretch")!;
+    const lm = lms({
+      [LM.LEFT_EAR]: { x: 0.45, y: 0.2, visibility: 1 },
+      [LM.RIGHT_EAR]: { x: 0.55, y: 0.35, visibility: 1 }, // 오른쪽으로 기울임
+      [LM.NOSE]: { x: 0.5, y: 0.4, visibility: 1 }, // 코가 귀선보다 아래 = 숙임
+    });
+    expect(ex.evaluate(lm, "right").inPosition).toBe(true);
+  });
+});
+
 describe("추천 운동", () => {
   it("머리 기울기 크면 목 스트레칭 추천", () => {
     expect(recommendExerciseIds({ headTiltDeg: 12 })).toContain("neck-side-stretch");
   });
-  it("어깨 기울기 크면 팔 들기 추천", () => {
-    expect(recommendExerciseIds({ shoulderTiltDeg: 8 })).toContain("arm-raise");
+  it("어깨 좌우 기울기는 운동 단정 X — assessPosture 전문가 플래그로 (recommend는 폴백)", () => {
+    // 지표-운동 불일치 정리: shoulderTilt 만으로는 특정 운동을 단정하지 않음
+    const r = assessPosture({ shoulderTiltDeg: 8 });
+    expect(r.advisories.some((a) => a.includes("전문가"))).toBe(true);
   });
-  it("측면 CVA 작으면 턱 당기기 추천", () => {
+  it("측면 CVA 작으면 턱 당기기 + 견갑거근 스트레칭 추천", () => {
+    const ids = recommendExerciseIds({ cvaAvailable: true, cvaDeg: POSTURE.CVA_FHP_DEG - 10 });
+    expect(ids).toContain("chin-tuck");
+    expect(ids).toContain("levator-scapulae-stretch");
+  });
+  it("측면 전인각 크면 라운드숄더 운동 추천", () => {
+    const ids = recommendExerciseIds({
+      shoulderProtractionAvailable: true,
+      shoulderProtractionDeg: POSTURE.ROUND_SHOULDER_DEG + 5,
+    });
+    expect(ids).toContain("scapular-retraction");
+    expect(ids).toContain("pec-stretch");
+  });
+  it("정면(전인 측정 불가)이면 라운드숄더 운동 추천 안 함", () => {
     expect(
-      recommendExerciseIds({ cvaAvailable: true, cvaDeg: POSTURE.CVA_FHP_DEG - 10 }),
-    ).toContain("chin-tuck");
+      recommendExerciseIds({ shoulderProtractionAvailable: false, shoulderProtractionDeg: 40 }),
+    ).not.toContain("scapular-retraction");
+  });
+  it("X다리(valgus) 크면 한 발 균형 추천", () => {
+    expect(
+      recommendExerciseIds({ kneeValgusDeg: POSTURE.KNEE_VALGUS_DEG + 3 }),
+    ).toContain("single-leg-balance");
   });
   it("CVA 측정 불가(정면)면 턱 당기기 추천 안 함", () => {
     expect(

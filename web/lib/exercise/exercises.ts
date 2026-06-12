@@ -70,7 +70,7 @@ export const EXERCISES: Exercise[] = [
     id: "arm-raise",
     name: "팔 옆으로 들기",
     emoji: "🙆",
-    helps: "굽은 어깨·라운드숄더",
+    helps: "어깨 가동성(일반)", // 라운드숄더 감지는 shoulderProtractionDeg → scapular-retraction 등으로 분리
     mode: "rep",
     reps: 10,
     instructions: "양팔을 옆으로 어깨 높이 이상까지 들었다 내립니다.",
@@ -175,6 +175,139 @@ export const EXERCISES: Exercise[] = [
       };
     },
   },
+  {
+    id: "levator-scapulae-stretch",
+    name: "견갑거근 스트레칭",
+    emoji: "🙇",
+    helps: "거북목 보강(견갑거근·상부 승모근)",
+    mode: "hold",
+    phases: ["right", "left"],
+    phaseLabels: { right: "오른쪽 겨드랑이 보기", left: "왼쪽 겨드랑이 보기" },
+    holdSec: 12,
+    instructions: "머리를 한쪽으로 돌려 비스듬히 숙여 겨드랑이를 봅니다. 반대 어깨는 내린 채 유지.",
+    evaluate(lm, phase) {
+      const s = headTiltSignal(lm);
+      const nose = lm[LM.NOSE];
+      const lEar = lm[LM.LEFT_EAR];
+      const rEar = lm[LM.RIGHT_EAR];
+      if (s == null || !vis(nose) || !vis(lEar) || !vis(rEar))
+        return { ok: false, inPosition: false, feedback: "얼굴이 보이게 해주세요" };
+      const earMidY = (lEar.y + rEar.y) / 2;
+      const lookDown = nose.y > earMidY + 0.03; // 코가 귀선보다 아래 = 숙임
+      const want = phase === "left" ? -1 : 1;
+      const tilted = want > 0 ? s > 0.3 : s < -0.3;
+      const inPos = tilted && lookDown;
+      return {
+        ok: true,
+        inPosition: inPos,
+        feedback: inPos ? "좋아요, 유지!" : "머리를 비스듬히 숙여 겨드랑이를 보세요",
+      };
+    },
+  },
+  {
+    id: "scapular-retraction",
+    name: "견갑 후인",
+    emoji: "🤸",
+    helps: "라운드숄더(견갑 후인·중하부 승모근)",
+    mode: "rep",
+    reps: 12,
+    instructions: "팔을 앞으로 든 뒤 팔꿈치를 뒤로 당겨 양 날개뼈를 모읍니다.",
+    evaluate(lm) {
+      const lSh = lm[LM.LEFT_SHOULDER];
+      const rSh = lm[LM.RIGHT_SHOULDER];
+      const lWr = lm[LM.LEFT_WRIST];
+      const rWr = lm[LM.RIGHT_WRIST];
+      if (!vis(lSh) || !vis(rSh) || !vis(lWr) || !vis(rWr))
+        return { ok: false, inPosition: false, feedback: "상체와 양팔이 보이게 해주세요" };
+      const shW = Math.abs(lSh.x - rSh.x) + 1e-6;
+      const wristW = Math.abs(lWr.x - rWr.x);
+      const atChest = Math.abs((lWr.y + rWr.y) / 2 - (lSh.y + rSh.y) / 2) < 0.2;
+      const pulled = wristW > shW * 1.1 && atChest; // 손목이 어깨보다 넓게 벌어짐
+      const released = wristW < shW * 0.8;
+      return {
+        ok: true,
+        inPosition: pulled,
+        released,
+        feedback: pulled ? "날개뼈를 모았어요!" : "팔꿈치를 뒤로 당겨 가슴을 펴세요",
+      };
+    },
+  },
+  {
+    id: "pec-stretch",
+    name: "흉근 스트레칭",
+    emoji: "🧍",
+    helps: "라운드숄더(흉근 이완)",
+    mode: "hold",
+    holdSec: 20,
+    instructions: "문틀에 팔을 대듯 팔꿈치를 어깨 높이로 올리고 가슴을 앞으로 내밀어 가슴을 늘립니다.",
+    evaluate(lm) {
+      const arm = (sh: number, el: number, wr: number) => {
+        if (!vis(lm[sh]) || !vis(lm[el]) || !vis(lm[wr])) return false;
+        const elbowAtShoulder = Math.abs(lm[el].y - lm[sh].y) < 0.12;
+        const forearmUp = lm[wr].y < lm[el].y - 0.05;
+        return elbowAtShoulder && forearmUp;
+      };
+      if (!vis(lm[LM.LEFT_SHOULDER]) && !vis(lm[LM.RIGHT_SHOULDER]))
+        return { ok: false, inPosition: false, feedback: "상체와 팔이 보이게 해주세요" };
+      const inPos =
+        arm(LM.LEFT_SHOULDER, LM.LEFT_ELBOW, LM.LEFT_WRIST) ||
+        arm(LM.RIGHT_SHOULDER, LM.RIGHT_ELBOW, LM.RIGHT_WRIST);
+      return {
+        ok: true,
+        inPosition: inPos,
+        feedback: inPos ? "좋아요, 가슴을 더 내미세요" : "팔꿈치를 어깨 높이로 올리세요",
+      };
+    },
+  },
+  {
+    id: "lower-trap-raise",
+    name: "하부 승모근 Y레이즈",
+    emoji: "🙌",
+    helps: "라운드숄더(하부 승모근 강화)",
+    mode: "rep",
+    reps: 12,
+    instructions: "엄지를 위로 한 채 양팔을 머리 위 Y자로 비스듬히 올렸다 내립니다.",
+    evaluate(lm) {
+      const lSh = lm[LM.LEFT_SHOULDER];
+      const rSh = lm[LM.RIGHT_SHOULDER];
+      const lWr = lm[LM.LEFT_WRIST];
+      const rWr = lm[LM.RIGHT_WRIST];
+      if (!vis(lSh) || !vis(rSh) || !vis(lWr) || !vis(rWr))
+        return { ok: false, inPosition: false, feedback: "상체와 양팔이 보이게 해주세요" };
+      const shW = Math.abs(lSh.x - rSh.x) + 1e-6;
+      const wristW = Math.abs(lWr.x - rWr.x);
+      const overhead = lWr.y < lSh.y - 0.1 && rWr.y < rSh.y - 0.1; // 손목이 어깨 위로
+      const up = overhead && wristW > shW; // 머리 위에서 벌어진 Y
+      const released = lWr.y > lSh.y && rWr.y > rSh.y;
+      return {
+        ok: true,
+        inPosition: up,
+        released,
+        feedback: up ? "좋아요, Y자!" : "양팔을 머리 위 Y자로 올리세요",
+      };
+    },
+  },
+  {
+    id: "single-leg-balance",
+    name: "한 발 균형",
+    emoji: "🦩",
+    helps: "X다리·고관절 안정(외전·외회전)",
+    mode: "hold",
+    holdSec: 15,
+    instructions: "정면으로 서서 한 발을 들고 무릎이 안으로 모이지 않게 균형을 유지합니다.",
+    evaluate(lm) {
+      const lAnk = lm[LM.LEFT_ANKLE];
+      const rAnk = lm[LM.RIGHT_ANKLE];
+      if (!vis(lAnk) || !vis(rAnk))
+        return { ok: false, inPosition: false, feedback: "양 발이 보이게 전신으로 서주세요" };
+      const lifted = Math.abs(lAnk.y - rAnk.y) > 0.1; // 한 발이 확실히 들림
+      return {
+        ok: true,
+        inPosition: lifted,
+        feedback: lifted ? "좋아요, 균형 유지!" : "한 발을 들어 균형을 잡으세요",
+      };
+    },
+  },
 ];
 
 export function exerciseById(id: string): Exercise | undefined {
@@ -182,23 +315,35 @@ export function exerciseById(id: string): Exercise | undefined {
 }
 
 // 측정 약점 → 판정 입력(각도). 임계값은 poseConfig.POSTURE 단일 출처.
+// shoulderTiltDeg/hipTiltDeg(좌우 높이차)는 운동 추천이 아니라 assessPosture 의
+// 측만 소프트 플래그용 — 자가운동으로 단정하지 않는다.
 export type PostureInput = {
   headTiltDeg?: number;
   shoulderTiltDeg?: number;
   hipTiltDeg?: number;
   cvaDeg?: number;
   cvaAvailable?: boolean;
+  shoulderProtractionDeg?: number;
+  shoulderProtractionAvailable?: boolean;
   kneeVarusDeg?: number;
+  kneeValgusDeg?: number;
 };
 
 // 약점 → 추천 교정운동 id. (측만 의심은 여기 넣지 않음 — assessPosture 의 전문가 플래그로.)
 export function recommendExerciseIds(opts: PostureInput): string[] {
   const ids: string[] = [];
+  // 거북목(측면 CVA) → 턱 당기기 + 견갑거근 스트레칭
+  if (opts.cvaAvailable && (opts.cvaDeg ?? 90) < POSTURE.CVA_FHP_DEG)
+    ids.push("chin-tuck", "levator-scapulae-stretch");
+  // 머리 좌우 기울기 → 목 옆 스트레칭
   if ((opts.headTiltDeg ?? 0) >= POSTURE.HEAD_TILT_DEG) ids.push("neck-side-stretch");
-  if ((opts.shoulderTiltDeg ?? 0) >= POSTURE.SHOULDER_TILT_DEG) ids.push("arm-raise");
-  if (opts.cvaAvailable && (opts.cvaDeg ?? 90) < POSTURE.CVA_FHP_DEG) ids.push("chin-tuck");
+  // 라운드숄더(측면 전인) → 견갑 후인·흉근 이완·하부승모근
+  if (opts.shoulderProtractionAvailable && (opts.shoulderProtractionDeg ?? 0) >= POSTURE.ROUND_SHOULDER_DEG)
+    ids.push("scapular-retraction", "pec-stretch", "lower-trap-raise");
+  // 오다리(varus) / X다리(valgus)
   if ((opts.kneeVarusDeg ?? 0) >= POSTURE.KNEE_VARUS_DEG) ids.push("hip-abduction");
-  if (ids.length === 0) ids.push("arm-raise");
+  if ((opts.kneeValgusDeg ?? 0) >= POSTURE.KNEE_VALGUS_DEG) ids.push("single-leg-balance");
+  if (ids.length === 0) ids.push("arm-raise"); // 특이소견 없음 → 일반 가동성
   return ids;
 }
 

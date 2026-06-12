@@ -41,7 +41,9 @@ export const POSTURE = {
   HEAD_TILT_DEG: 5, // 머리 좌우 기울기 ≥ → 목 옆 스트레칭
   SHOULDER_TILT_DEG: 4, // 어깨 좌우 기울기 ≥ → 팔 들기
   CVA_FHP_DEG: 50, // 거북목: 측면 CVA가 이 값 미만이면 전방두부(FHP) 의심
-  KNEE_VARUS_DEG: 6, // 오다리: hip-knee-ankle 직선편차 ≥ → 내반 의심
+  ROUND_SHOULDER_DEG: 22, // 라운드숄더: 측면에서 골반→어깨 선의 전방경사 ≥ → 말린 어깨 의심
+  KNEE_VARUS_DEG: 6, // 오다리(varus): hip-knee-ankle 직선편차(무릎 바깥) ≥ → 내반 의심
+  KNEE_VALGUS_DEG: 6, // X다리(valgus): 직선편차(무릎 안쪽) ≥ → 외반 의심
   LATERAL_ASYM_DEG: 5, // 측만 의심: 어깨/골반 좌우 높이차 ≥ → 전문가 평가 소프트 플래그
   SIDE_VIEW_SHOULDER_RATIO: 0.35, // 측면 자동감지: 어깨폭/몸통높이 < 이 값이면 측면으로 간주
 } as const;

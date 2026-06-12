@@ -4,6 +4,7 @@ import {
   lineTiltDeg,
   isSideView,
   forwardHeadCvaDeg,
+  shoulderProtractionDeg,
   kneeVarusDeg,
   type Pt,
 } from "./score";
@@ -158,5 +159,42 @@ describe("kneeVarusDeg", () => {
       [LM.RIGHT_ANKLE]: { x: 0.55, y: 0.9, visibility: 1 },
     });
     expect(kneeVarusDeg(pose).varusDeg).toBeGreaterThan(POSTURE.KNEE_VARUS_DEG);
+  });
+  it("무릎이 안쪽으로 모이면 valgus(X다리)로 분류", () => {
+    const pose = makeLandmarks({
+      ...frontShoulders,
+      [LM.LEFT_HIP]: { x: 0.45, y: 0.5, visibility: 1 },
+      [LM.LEFT_KNEE]: { x: 0.5, y: 0.7, visibility: 1 }, // 무릎이 안(중심)으로
+      [LM.LEFT_ANKLE]: { x: 0.45, y: 0.9, visibility: 1 },
+      [LM.RIGHT_HIP]: { x: 0.55, y: 0.5, visibility: 1 },
+      [LM.RIGHT_KNEE]: { x: 0.5, y: 0.7, visibility: 1 },
+      [LM.RIGHT_ANKLE]: { x: 0.55, y: 0.9, visibility: 1 },
+    });
+    const r = kneeVarusDeg(pose);
+    expect(r.valgusDeg).toBeGreaterThan(POSTURE.KNEE_VALGUS_DEG);
+    expect(r.varusDeg).toBe(0);
+  });
+});
+
+describe("shoulderProtractionDeg (라운드숄더, 측면 전용)", () => {
+  // 측면(어깨 좁음) — 어깨를 골반보다 앞(shX)으로
+  function sideProtraction(shX: number): Pt[] {
+    return makeLandmarks({
+      [LM.LEFT_SHOULDER]: { x: shX, y: 0.4, visibility: 1 },
+      [LM.RIGHT_SHOULDER]: { x: shX + 0.02, y: 0.4, visibility: 1 },
+      [LM.LEFT_HIP]: { x: 0.5, y: 0.7, visibility: 1 },
+      [LM.RIGHT_HIP]: { x: 0.52, y: 0.7, visibility: 1 },
+    });
+  }
+  it("정면이면 보류(need-side)", () => {
+    const r = shoulderProtractionDeg(idealPose());
+    expect(r.available).toBe(false);
+    expect(r.reason).toBe("need-side");
+  });
+  it("측면 — 어깨가 골반보다 앞일수록 전인각이 커진다", () => {
+    const fwd = shoulderProtractionDeg(sideProtraction(0.62));
+    const upright = shoulderProtractionDeg(sideProtraction(0.5));
+    expect(fwd.available).toBe(true);
+    expect(fwd.protractionDeg).toBeGreaterThan(upright.protractionDeg);
   });
 });
