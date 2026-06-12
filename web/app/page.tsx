@@ -12,9 +12,12 @@ export default function Home() {
           사진/영상으로 <strong>실제 자세</strong>를 확인하고, <strong>황금비율(φ) 체형 점수</strong>와{" "}
           <strong>10일 전·후 진척</strong>을 추적하는 셀프 자세코칭.
         </p>
-        <ul className="text-sm text-zinc-500 dark:text-zinc-500">
-          <li>다음 단계 P1 — 카메라 → MediaPipe 자세추정 → 스켈레톤 오버레이</li>
-        </ul>
+        <a
+          href="/capture"
+          className="rounded-full bg-foreground px-6 py-3 text-base font-medium text-background transition-opacity hover:opacity-90"
+        >
+          카메라로 자세 보기 →
+        </a>
       </main>
     </div>
   );
