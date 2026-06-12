@@ -307,6 +307,12 @@ export default function PoseCamera() {
             <span className="text-xs text-zinc-500">{saveMsg}</span>
             <div className="flex gap-2">
               <Link
+                href="/coach"
+                className="rounded-full border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-black/4 dark:border-zinc-700 dark:text-zinc-200"
+              >
+                교정운동
+              </Link>
+              <Link
                 href="/progress"
                 className="rounded-full border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-black/4 dark:border-zinc-700 dark:text-zinc-200"
               >
