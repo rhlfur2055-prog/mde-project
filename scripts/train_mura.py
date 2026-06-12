@@ -113,7 +113,10 @@ def train_with_oom_retry(min_batch: int = 2, batch: int = 16, **kw) -> dict:
             if "out of memory" not in str(exc).lower():
                 raise
             try:
+                import gc
+                gc.collect()
                 torch.cuda.empty_cache()
+                torch.cuda.synchronize()
             except Exception:
                 pass
             new = batch // 2

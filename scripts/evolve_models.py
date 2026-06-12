@@ -114,10 +114,16 @@ def evolve(train_dir: str, valid_dir: str, models_dir: str, out_prefix: str,
         print(f"\n===== GEN {gen} (부위={_scope_tag(scope)}, 후보 {len(population)}개) =====", flush=True)
         scored = []
         for cand in population:
-            path, cached = train_candidate(cand, scope, models_dir, train_dir, device,
-                                           epochs, batch, pretrained, train_max_per_class)
-            met = evaluate_accuracy(path, cand["arch"], scope, valid_dir, device,
-                                    batch, eval_max_per_class)
+            try:
+                path, cached = train_candidate(cand, scope, models_dir, train_dir, device,
+                                               epochs, batch, pretrained, train_max_per_class)
+                met = evaluate_accuracy(path, cand["arch"], scope, valid_dir, device,
+                                        batch, eval_max_per_class)
+            except Exception as exc:  # noqa: BLE001 — 한 후보 실패가 세대를 죽이지 않게
+                print(f"  [실패] {sig(cand, scope)}: {type(exc).__name__} {exc} "
+                      f"— 정확도 0 처리하고 다음 후보 계속", flush=True)
+                met = {"accuracy": 0.0, "sensitivity": 0.0, "specificity": 0.0, "n": 0}
+                cached = False
             row = {**cand, "sig": sig(cand, scope), "cached": cached,
                    "accuracy": met["accuracy"], "sensitivity": met["sensitivity"],
                    "specificity": met["specificity"], "n": met["n"]}
