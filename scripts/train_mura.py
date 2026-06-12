@@ -49,36 +49,74 @@ def build_transform(augment: bool = False) -> T.Compose:
 def train(data_dir: str, epochs: int = 3, steps: int | None = None, batch: int = 8,
           lr: float = 1e-4, arch: str = "densenet169", pretrained: bool = False,
           out: str = "data/mura_model.pt", device: str = "cpu",
-          max_per_class: int | None = None, augment: bool = False) -> dict:
+          max_per_class: int | None = None, augment: bool = False,
+          log_every: int = 1) -> dict:
+    import time
     ds = MuraDataset(data_dir, transform=build_transform(augment), max_per_class=max_per_class)
     if len(ds) == 0:
         raise SystemExit(f"데이터 없음: {data_dir} 에 이미지가 없습니다.")
-    dl = DataLoader(ds, batch_size=batch, shuffle=True)
+    pin = device.startswith("cuda")
+    dl = DataLoader(ds, batch_size=batch, shuffle=True, pin_memory=pin)
     model = build_model(arch, pretrained).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr)
     crit = nn.CrossEntropyLoss()
+    nbatches = (len(ds) + batch - 1) // batch
+    print(f"[train] arch={arch} device={device} batch={batch} samples={len(ds)} "
+          f"batches/epoch={nbatches} epochs={epochs}", flush=True)
 
     model.train()
     done = 0
+    t0 = time.perf_counter()
     for ep in range(epochs):
+        ep_loss = 0.0
+        ep_n = 0
         for x, y in dl:
-            x = x.to(device)
-            y = torch.as_tensor(y).to(device)
+            x = x.to(device, non_blocking=pin)
+            y = torch.as_tensor(y).to(device, non_blocking=pin)
             opt.zero_grad()
             loss = crit(model(x), y)
             loss.backward()
             opt.step()
             done += 1
-            print(f"epoch {ep + 1} step {done} loss {loss.item():.4f}", flush=True)
+            ep_n += 1
+            ep_loss += loss.item()
+            if done % log_every == 0:
+                print(f"  epoch {ep + 1} step {done}/{nbatches * epochs} loss {loss.item():.4f} "
+                      f"[{time.perf_counter() - t0:.0f}s]", flush=True)
             if steps and done >= steps:
                 break
+        print(f"[epoch {ep + 1}] 평균 loss {ep_loss / max(1, ep_n):.4f} "
+              f"(누적 {time.perf_counter() - t0:.0f}s)", flush=True)
         if steps and done >= steps:
             break
 
+    elapsed = time.perf_counter() - t0
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     torch.save(model.state_dict(), out)
-    print(f"saved {out} (samples={len(ds)}, steps={done}, arch={arch}, augment={augment})", flush=True)
-    return {"out": out, "samples": len(ds), "steps": done, "arch": arch}
+    peak = (torch.cuda.max_memory_allocated() / 1e6) if device.startswith("cuda") else 0
+    print(f"saved {out} (samples={len(ds)}, steps={done}, arch={arch}, augment={augment}, "
+          f"elapsed={elapsed:.0f}s, gpu_peak={peak:.0f}MB)", flush=True)
+    return {"out": out, "samples": len(ds), "steps": done, "arch": arch,
+            "elapsed_s": round(elapsed, 1), "gpu_peak_mb": round(peak, 1)}
+
+
+def train_with_oom_retry(min_batch: int = 2, batch: int = 16, **kw) -> dict:
+    """CUDA OOM 시 batch를 절반씩 줄여 재시도 (8GB GPU 안전장치). 조정 내역 로그."""
+    while True:
+        try:
+            return train(batch=batch, **kw)
+        except RuntimeError as exc:
+            if "out of memory" not in str(exc).lower():
+                raise
+            try:
+                torch.cuda.empty_cache()
+            except Exception:
+                pass
+            new = batch // 2
+            print(f"[OOM] batch {batch} → {new} 로 감축 후 재시도", flush=True)
+            if new < min_batch:
+                raise SystemExit(f"[OOM] batch {min_batch} 미만으로도 실패 — 중단")
+            batch = new
 
 
 def main() -> None:
@@ -97,6 +135,7 @@ def main() -> None:
                     help="빠른 검증: max-per-class=100, epochs=2 기본")
     ap.add_argument("--out", default="data/mura_model.pt")
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--log-every", type=int, default=1, dest="log_every")
     a = ap.parse_args()
     if not a.data:
         raise SystemExit("--data <MURA폴더> 또는 MURA_DIR 환경변수 필요")
@@ -105,8 +144,11 @@ def main() -> None:
     if a.quick:
         mpc = mpc or 100
         epochs = min(epochs, 2)
-    train(a.data, epochs, a.steps, a.batch, a.lr, a.arch, a.pretrained,
-          a.out, a.device, max_per_class=mpc, augment=a.augment)
+    train_with_oom_retry(
+        min_batch=2, batch=a.batch,
+        data_dir=a.data, epochs=epochs, steps=a.steps, lr=a.lr, arch=a.arch,
+        pretrained=a.pretrained, out=a.out, device=a.device,
+        max_per_class=mpc, augment=a.augment, log_every=a.log_every)
 
 
 if __name__ == "__main__":
