@@ -102,16 +102,19 @@ export default function ExerciseDemo({
   const cls = "h-[300px] w-[240px] rounded-lg bg-zinc-100 object-contain dark:bg-zinc-800";
 
   if (tier === "video") {
+    // 투명 webm(배경 제거본) 우선, 없으면 mp4. 배경 박스 없이 캐릭터만.
     return (
       <video
-        src={`${base}.mp4`}
         autoPlay
         loop
         muted
         playsInline
         onError={() => setTier("gif")}
-        className={cls}
-      />
+        className="h-[300px] w-[240px] object-contain"
+      >
+        <source src={`${base}.webm`} type="video/webm" />
+        <source src={`${base}.mp4`} type="video/mp4" />
+      </video>
     );
   }
   if (tier === "gif") {
