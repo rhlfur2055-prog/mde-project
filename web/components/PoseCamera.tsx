@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPoseRuntime, type PoseRuntime } from "@/lib/pose/poseLandmarker";
+import {
+  createPersonDetector,
+  type PersonBox,
+  type PersonDetector,
+} from "@/lib/pose/personDetector";
+import { YOLO_CONFIG } from "@/lib/pose/config";
 import { computeBodyMetrics, type BodyMetrics } from "@/lib/golden/score";
 
 type Status = "idle" | "loading" | "running" | "error";
@@ -15,12 +21,19 @@ export default function PoseCamera() {
   const lastVideoTimeRef = useRef<number>(-1);
   const fpsRef = useRef<{ last: number; frames: number }>({ last: 0, frames: 0 });
   const lastMetricsAtRef = useRef<number>(0);
+  // YOLO 사람검출(온디바이스, 자세추정과 분리)
+  const detectorRef = useRef<PersonDetector | null>(null);
+  const detectorLoadingRef = useRef(false);
+  const detectInFlightRef = useRef(false);
+  const lastBoxRef = useRef<PersonBox | null>(null);
+  const lastDetectAtRef = useRef<number>(0);
 
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
   const [fps, setFps] = useState(0);
   const [ms, setMs] = useState(0);
   const [detected, setDetected] = useState(false);
+  const [personScore, setPersonScore] = useState(0);
   const [metrics, setMetrics] = useState<BodyMetrics | null>(null);
 
   const stop = useCallback(() => {
@@ -29,11 +42,16 @@ export default function PoseCamera() {
     streamRef.current = null;
     runtimeRef.current?.landmarker.close();
     runtimeRef.current = null;
+    detectorRef.current?.close();
+    detectorRef.current = null;
+    lastBoxRef.current = null;
+    detectInFlightRef.current = false;
     lastVideoTimeRef.current = -1;
     setStatus("idle");
     setFps(0);
     setMs(0);
     setDetected(false);
+    setPersonScore(0);
     setMetrics(null);
   }, []);
 
@@ -75,7 +93,43 @@ export default function PoseCamera() {
           );
           drawingUtils.drawLandmarks(landmarks, { color: "#22d3ee", radius: 4 });
         }
+
+        // YOLO 사람검출 박스(우리 ONNX, 온디바이스) — 좌표는 원본 픽셀 공간
+        const box = lastBoxRef.current;
+        if (box) {
+          ctx.strokeStyle = "#fb923c";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(box.x1, box.y1, box.x2 - box.x1, box.y2 - box.y1);
+          ctx.fillStyle = "#fb923c";
+          ctx.font = "16px sans-serif";
+          ctx.fillText(
+            `person ${Math.round(box.score * 100)}%`,
+            box.x1 + 4,
+            Math.max(16, box.y1 - 6),
+          );
+        }
         ctx.restore();
+
+        // 사람검출은 자세추정과 분리해 ~5fps로(비동기, 겹침 방지)
+        const det = detectorRef.current;
+        if (
+          det &&
+          !detectInFlightRef.current &&
+          t1 - lastDetectAtRef.current >= YOLO_CONFIG.DETECT_INTERVAL_MS
+        ) {
+          detectInFlightRef.current = true;
+          lastDetectAtRef.current = t1;
+          det
+            .detect(video, video.videoWidth, video.videoHeight)
+            .then((b) => {
+              lastBoxRef.current = b;
+              setPersonScore(b ? b.score : 0);
+            })
+            .catch(() => {})
+            .finally(() => {
+              detectInFlightRef.current = false;
+            });
+        }
 
         const f = fpsRef.current;
         f.frames++;
@@ -110,6 +164,21 @@ export default function PoseCamera() {
       setStatus("running");
       fpsRef.current = { last: performance.now(), frames: 0 };
       rafRef.current = requestAnimationFrame(loop);
+
+      // YOLO 사람검출기(ONNX ~12MB)는 백그라운드 로드 → 준비되면 박스 표시
+      if (!detectorRef.current && !detectorLoadingRef.current) {
+        detectorLoadingRef.current = true;
+        createPersonDetector()
+          .then((d) => {
+            detectorRef.current = d;
+          })
+          .catch((e) => {
+            console.warn("YOLO 검출기 로드 실패(자세추정은 계속):", e);
+          })
+          .finally(() => {
+            detectorLoadingRef.current = false;
+          });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setStatus("error");
@@ -142,6 +211,9 @@ export default function PoseCamera() {
           <span>추론: {ms}ms</span>
           <span className={detected ? "text-lime-600" : "text-zinc-400"}>
             {detected ? "● 자세 감지" : "○ 미감지"}
+          </span>
+          <span className={personScore > 0 ? "text-orange-500" : "text-zinc-400"}>
+            YOLO {personScore > 0 ? `${Math.round(personScore * 100)}%` : "—"}
           </span>
         </div>
         {status === "running" ? (

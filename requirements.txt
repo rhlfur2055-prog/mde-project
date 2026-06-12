@@ -12,3 +12,6 @@ torchxrayvision==1.4.0             # D2 베이스라인 흉부 분류기 (근골
 google-genai==2.8.0                # 보고서·아레나 Gemini 클라이언트 (외부 API는 Gemini만)
 python-dotenv==1.2.2               # .env 로드 (로컬)
 pynetdicom==3.0.4                  # D8 PACS C-STORE 수신 서버 (DICOM 네트워크 수신)
+ultralytics==8.4.66                # P2 YOLOv8n 사람검출 ONNX export (COCO 사전학습, 범용 가중치)
+onnx==1.21.0                       # P2 ONNX 모델 저장·그래프 점검 (입출력 텐서 검증)
+onnxruntime==1.26.0                # P2 ONNX 런타임 (export 검증용; 브라우저는 onnxruntime-web 사용)

@@ -12,3 +12,15 @@ export const POSE_CONFIG = {
   MIN_POSE_PRESENCE_CONFIDENCE: 0.5,
   MIN_TRACKING_CONFIDENCE: 0.5,
 } as const;
+
+// YOLOv8n 사람검출(우리가 export한 ONNX) — onnxruntime-web 온디바이스 실행
+export const YOLO_CONFIG = {
+  MODEL_URL: "/models/yolov8n.onnx", // ml/export_onnx.py 산출물(web/public/models)
+  // onnxruntime-web wasm은 번들 대신 CDN에서(설치 버전과 일치)
+  WASM_PATH: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/",
+  INPUT_SIZE: 640, // images: [1,3,640,640]
+  PERSON_CLASS: 0, // COCO class 0 = person
+  CONF_THRESHOLD: 0.5,
+  IOU_THRESHOLD: 0.45,
+  DETECT_INTERVAL_MS: 200, // 사람검출은 ~5fps로(자세추정과 분리)
+} as const;
