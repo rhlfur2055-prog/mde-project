@@ -43,14 +43,15 @@ class MuraDataset(Dataset):
     """
 
     def __init__(self, root: str, transform: Optional[Callable] = None,
-                 class_to_idx: Optional[dict[str, int]] = None) -> None:
+                 class_to_idx: Optional[dict[str, int]] = None,
+                 max_per_class: Optional[int] = None) -> None:
         self.root = pathlib.Path(root)
         self.transform = transform
         imgs = sorted(p for p in self.root.rglob("*") if p.suffix.lower() in IMG_EXT)
 
         marker = [(p, label_from_path(p)) for p in imgs]
         if imgs and all(lbl is not None for _, lbl in marker):
-            self.samples = marker  # MURA 폴더명 규칙
+            self.samples = marker  # MURA 폴더명 규칙 (study*_positive/negative — CSV와 일치 검증됨)
             self.class_to_idx = {"negative": 0, "positive": 1}
         else:
             # ImageFolder 폴백: 최상위 하위폴더명을 클래스로
@@ -64,6 +65,16 @@ class MuraDataset(Dataset):
                 (p, self.class_to_idx.get(p.relative_to(self.root).parts[0], 0))
                 for p in imgs if len(p.relative_to(self.root).parts) > 1
             ]
+
+        if max_per_class is not None:
+            # 클래스 균형 유지하며 클래스당 표본 수 제한 (CPU 빠른 검증용)
+            capped: list = []
+            counts: dict[int, int] = {}
+            for p, lbl in self.samples:
+                if counts.get(lbl, 0) < max_per_class:
+                    capped.append((p, lbl))
+                    counts[lbl] = counts.get(lbl, 0) + 1
+            self.samples = capped
 
     def __len__(self) -> int:
         return len(self.samples)
