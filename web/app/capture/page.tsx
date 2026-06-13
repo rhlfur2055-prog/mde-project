@@ -1,11 +1,15 @@
 import PoseCamera from "@/components/PoseCamera";
 import OnboardingGate from "@/components/OnboardingGate";
 import CaptureGuide from "@/components/CaptureGuide";
+import AuthButton from "@/components/AuthButton";
 
 export default function CapturePage() {
   return (
     <OnboardingGate>
       <div className="flex flex-1 flex-col items-center gap-6 bg-zinc-50 px-4 py-10 dark:bg-black">
+        <div className="flex w-full max-w-2xl justify-end">
+          <AuthButton />
+        </div>
         <header className="flex flex-col items-center gap-2 text-center">
           <span className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium text-zinc-500 dark:border-zinc-700">
             P1 · 온디바이스 자세 캡처

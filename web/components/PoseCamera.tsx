@@ -23,6 +23,7 @@ import {
 import { AGGREGATE } from "@/lib/golden/poseConfig";
 import { assessPosture, exerciseById } from "@/lib/exercise/exercises";
 import { saveScan } from "@/lib/supabase/scans";
+import { useSession, signInWithGoogle } from "@/lib/supabase/session";
 import Link from "next/link";
 
 type Assessment = { exerciseIds: string[]; advisories: string[] };
@@ -71,6 +72,10 @@ export default function PoseCamera() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [confirmed, setConfirmed] = useState(false);
+  // 로그인 세션 — 저장은 로그인 사용자만(계정 격리 RLS). 루프(stale 클로저)에서 ref로 읽음.
+  const { session } = useSession();
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
   const stop = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -166,12 +171,18 @@ export default function PoseCamera() {
             ) {
               autoSavedRef.current = true; // 가드: 같은 측정에서 중복 저장 금지
               setConfirmed(true);
-              setSaving(true);
-              setSaveMsg("측정 확인 — 자동 저장 중…");
-              saveScan(a.metrics, medLm)
-                .then(() => setSaveMsg("확인완료 ✓ 자동 저장됨"))
-                .catch((e) => setSaveMsg("저장 실패: " + errMsg(e)))
-                .finally(() => setSaving(false));
+              if (sessionRef.current) {
+                // 로그인 사용자 → 계정에 저장(RLS: user_id=auth.uid())
+                setSaving(true);
+                setSaveMsg("측정 확인 — 자동 저장 중…");
+                saveScan(a.metrics, medLm)
+                  .then(() => setSaveMsg("확인완료 ✓ 자동 저장됨"))
+                  .catch((e) => setSaveMsg("저장 실패: " + errMsg(e)))
+                  .finally(() => setSaving(false));
+              } else {
+                // 비로그인 → 측정은 확인하되 저장은 보류(로그인 유도)
+                setSaveMsg("확인완료 ✓ — 로그인하면 이 측정이 저장돼요");
+              }
             }
           } else {
             setAssess(null); // 미통과 → 추천 산출 안 함
@@ -283,6 +294,12 @@ export default function PoseCamera() {
 
   const onSave = useCallback(async () => {
     if (!metrics) return;
+    if (!session) {
+      // 비로그인 → 구글 로그인으로 유도(로그인 후 같은 페이지 복귀)
+      setSaveMsg("저장하려면 로그인하세요…");
+      await signInWithGoogle();
+      return;
+    }
     try {
       setSaving(true);
       setSaveMsg("");
@@ -293,7 +310,7 @@ export default function PoseCamera() {
     } finally {
       setSaving(false);
     }
-  }, [metrics]);
+  }, [metrics, session]);
 
   // 언마운트 시 정리
   useEffect(() => stop, [stop]);
@@ -475,7 +492,13 @@ export default function PoseCamera() {
                 disabled={saving}
                 className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:opacity-50"
               >
-                {saving ? "저장 중…" : confirmed ? "다시 저장" : "이 측정 저장"}
+                {saving
+                  ? "저장 중…"
+                  : !session
+                    ? "로그인하고 저장"
+                    : confirmed
+                      ? "다시 저장"
+                      : "이 측정 저장"}
               </button>
             </div>
           </div>

@@ -45,14 +45,13 @@ export async function saveScan(
   return data as ScanRow;
 }
 
-// 이 기기의 스캔 이력(최신순)
+// 내 스캔 이력(최신순). RLS(user_id=auth.uid())가 본인 행만 반환 → 기기 무관, 계정 격리.
 export async function listScans(limit = 100): Promise<ScanRow[]> {
   const { data, error } = await supabase
     .from("scans")
     .select(
       "id,device_id,taken_at,overall_score,overall_grade,symmetry_score,golden_score,lower_upper_ratio,shoulder_tilt_deg,hip_tilt_deg,head_tilt_deg",
     )
-    .eq("device_id", getDeviceId())
     .order("taken_at", { ascending: false })
     .limit(limit);
   if (error) throw error;

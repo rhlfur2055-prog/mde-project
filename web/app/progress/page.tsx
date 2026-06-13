@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { listScans, type ScanRow } from "@/lib/supabase/scans";
+import { useSession, signInWithGoogle } from "@/lib/supabase/session";
+import AuthButton from "@/components/AuthButton";
 
 function fmt(ts: string): string {
   const d = new Date(ts);
@@ -27,11 +29,17 @@ function ScoreBadge({ score, grade }: { score: number | null; grade: string | nu
 }
 
 export default function ProgressPage() {
+  const { session, loading: authLoading } = useSession();
   const [scans, setScans] = useState<ScanRow[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!session) {
+      setStatus("ready"); // 비로그인 → 로그인 안내 표시(아래)
+      return;
+    }
     listScans()
       .then((rows) => {
         setScans(rows);
@@ -41,7 +49,28 @@ export default function ProgressPage() {
         setError(e instanceof Error ? e.message : String(e));
         setStatus("error");
       });
-  }, []);
+  }, [session, authLoading]);
+
+  // 비로그인 → 진척은 계정 데이터라 로그인 필요
+  if (!authLoading && !session) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 bg-zinc-50 px-4 py-24 text-center dark:bg-black">
+        <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">내 진척</h1>
+        <p className="max-w-sm text-sm text-zinc-600 dark:text-zinc-400">
+          진척 기록은 계정에 안전하게 저장됩니다(본인만 열람). 구글로 로그인하면 전·후 비교를 볼 수 있어요.
+        </p>
+        <button
+          onClick={signInWithGoogle}
+          className="rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background hover:opacity-90"
+        >
+          구글로 로그인
+        </button>
+        <Link href="/capture" className="text-sm text-zinc-500 underline">
+          먼저 측정해 보기
+        </Link>
+      </div>
+    );
+  }
 
   // 전/후 비교: 가장 오래된 vs 가장 최근
   const newest = scans[0];
@@ -58,12 +87,15 @@ export default function ProgressPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-black dark:text-zinc-50">
           내 진척
         </h1>
-        <Link
-          href="/capture"
-          className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90"
-        >
-          + 새 측정
-        </Link>
+        <div className="flex items-center gap-3">
+          <AuthButton />
+          <Link
+            href="/capture"
+            className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90"
+          >
+            + 새 측정
+          </Link>
+        </div>
       </header>
 
       <div className="w-full max-w-2xl">

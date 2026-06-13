@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AuthButton from "@/components/AuthButton";
 
 // posera 랜딩(SaaS형) — Posture AI/MWM(측정·리포트) + Umax(점수카드·freemium) + Kemtai/Onyx(실시간 코칭)
 // 레퍼런스에서 차용: 정면+측면 촬영, 이상정렬 오버레이, 0~100 점수, 30일 플랜, 공유 카드, Free/Pro/전문가 티어.
@@ -126,12 +127,15 @@ export default function Home() {
             <a href="#features" className="hover:text-black dark:hover:text-zinc-50">기능</a>
             <a href="#pricing" className="hover:text-black dark:hover:text-zinc-50">요금</a>
           </div>
-          <Link
-            href="/capture"
-            className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
-          >
-            무료로 측정
-          </Link>
+          <div className="flex items-center gap-3">
+            <AuthButton />
+            <Link
+              href="/capture"
+              className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90"
+            >
+              무료로 측정
+            </Link>
+          </div>
         </nav>
       </header>
 
