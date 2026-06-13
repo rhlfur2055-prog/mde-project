@@ -9,12 +9,18 @@ import {
 } from "@/lib/pose/personDetector";
 import { YOLO_CONFIG } from "@/lib/pose/config";
 import {
-  computeBodyMetrics,
   forwardHeadCvaDeg,
   shoulderProtractionDeg,
   kneeVarusDeg,
   type BodyMetrics,
+  type Pt,
 } from "@/lib/golden/score";
+import {
+  aggregateFrames,
+  aggregateLandmarks,
+  type AggregatedMetrics,
+} from "@/lib/golden/aggregate";
+import { AGGREGATE } from "@/lib/golden/poseConfig";
 import { assessPosture, exerciseById } from "@/lib/exercise/exercises";
 import { saveScan } from "@/lib/supabase/scans";
 import Link from "next/link";
@@ -22,6 +28,14 @@ import Link from "next/link";
 type Assessment = { exerciseIds: string[]; advisories: string[] };
 
 type Status = "idle" | "loading" | "running" | "error";
+
+// Supabase 에러는 Error 인스턴스가 아니라 {message,code,...} 객체 → message 우선 추출
+function errMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object" && "message" in e)
+    return String((e as { message: unknown }).message);
+  return String(e);
+}
 
 export default function PoseCamera() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -33,12 +47,17 @@ export default function PoseCamera() {
   const fpsRef = useRef<{ last: number; frames: number }>({ last: 0, frames: 0 });
   const lastMetricsAtRef = useRef<number>(0);
   const lastLandmarksRef = useRef<unknown>(null);
+  // 재현성: 최근 프레임 랜드마크 롤링 버퍼(집계·게이팅 입력). 단일 프레임 직결 금지.
+  const framesRef = useRef<Pt[][]>([]);
   // YOLO 사람검출(온디바이스, 자세추정과 분리)
   const detectorRef = useRef<PersonDetector | null>(null);
   const detectorLoadingRef = useRef(false);
   const detectInFlightRef = useRef(false);
   const lastBoxRef = useRef<PersonBox | null>(null);
   const lastDetectAtRef = useRef<number>(0);
+  // 반자동 확인: 신뢰도 충분 조건이 연속 유지되기 시작한 시각(0=미충족) + 자동저장 1회 가드
+  const stableSinceRef = useRef<number>(0);
+  const autoSavedRef = useRef<boolean>(false);
 
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
@@ -47,9 +66,11 @@ export default function PoseCamera() {
   const [detected, setDetected] = useState(false);
   const [personScore, setPersonScore] = useState(0);
   const [metrics, setMetrics] = useState<BodyMetrics | null>(null);
+  const [agg, setAgg] = useState<AggregatedMetrics | null>(null);
   const [assess, setAssess] = useState<Assessment | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
 
   const stop = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
@@ -62,12 +83,17 @@ export default function PoseCamera() {
     lastBoxRef.current = null;
     detectInFlightRef.current = false;
     lastVideoTimeRef.current = -1;
+    framesRef.current = [];
+    stableSinceRef.current = 0;
+    autoSavedRef.current = false;
+    setConfirmed(false);
     setStatus("idle");
     setFps(0);
     setMs(0);
     setDetected(false);
     setPersonScore(0);
     setMetrics(null);
+    setAgg(null);
     setAssess(null);
   }, []);
 
@@ -96,30 +122,64 @@ export default function PoseCamera() {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const drawingUtils = new runtime.mp.DrawingUtils(ctx);
         setDetected(result.landmarks.length > 0);
-        // 점수는 ~5fps로 갱신(화면 떨림 방지) — P3 황금비율 엔진
-        if (result.landmarks.length > 0 && t1 - lastMetricsAtRef.current >= 200) {
+        // 매 프레임 랜드마크를 롤링 버퍼에 적재(집계 입력). 윈도 초과분은 폐기.
+        if (result.landmarks.length > 0) {
+          const buf = framesRef.current;
+          buf.push(result.landmarks[0] as Pt[]);
+          if (buf.length > AGGREGATE.WINDOW) buf.splice(0, buf.length - AGGREGATE.WINDOW);
+        }
+
+        // 점수는 ~5fps로 갱신(화면 떨림 방지). 단일 프레임이 아니라 집계·게이팅 결과 사용.
+        if (framesRef.current.length > 0 && t1 - lastMetricsAtRef.current >= 200) {
           lastMetricsAtRef.current = t1;
-          const lm0 = result.landmarks[0];
-          lastLandmarksRef.current = lm0;
-          const m = computeBodyMetrics(lm0);
-          setMetrics(m);
-          // 신규 지표(거북목 CVA·오다리 내반) — 측면/정면은 기하로 자동 판별.
-          const cva = forwardHeadCvaDeg(lm0);
-          const prot = shoulderProtractionDeg(lm0);
-          const knee = kneeVarusDeg(lm0);
-          setAssess(
-            assessPosture({
-              headTiltDeg: m.symmetry.headTiltDeg,
-              shoulderTiltDeg: m.symmetry.shoulderTiltDeg,
-              hipTiltDeg: m.symmetry.hipTiltDeg,
-              cvaDeg: cva.cvaDeg,
-              cvaAvailable: cva.available,
-              shoulderProtractionDeg: prot.protractionDeg,
-              shoulderProtractionAvailable: prot.available,
-              kneeVarusDeg: knee.available ? knee.varusDeg : 0,
-              kneeValgusDeg: knee.available ? knee.valgusDeg : 0,
-            }),
-          );
+          const a = aggregateFrames(framesRef.current);
+          const medLm = aggregateLandmarks(framesRef.current); // 집계 랜드마크(단일 프레임 직결 금지)
+          lastLandmarksRef.current = medLm;
+          setMetrics(a.metrics);
+          setAgg(a);
+
+          // 비진단/confidence 게이팅: 게이트 미통과·저신뢰면 추천 보류(재촬영 유도).
+          if (a.gatePassed && a.confidence >= AGGREGATE.MIN_CONFIDENCE) {
+            // 신규 지표(거북목 CVA·오다리 내반)도 집계 랜드마크로 산출.
+            const cva = forwardHeadCvaDeg(medLm);
+            const prot = shoulderProtractionDeg(medLm);
+            const knee = kneeVarusDeg(medLm);
+            setAssess(
+              assessPosture({
+                headTiltDeg: a.metrics.symmetry.headTiltDeg,
+                shoulderTiltDeg: a.metrics.symmetry.shoulderTiltDeg,
+                hipTiltDeg: a.metrics.symmetry.hipTiltDeg,
+                cvaDeg: cva.cvaDeg,
+                cvaAvailable: cva.available,
+                shoulderProtractionDeg: prot.protractionDeg,
+                shoulderProtractionAvailable: prot.available,
+                kneeVarusDeg: knee.available ? knee.varusDeg : 0,
+                kneeValgusDeg: knee.available ? knee.valgusDeg : 0,
+              }),
+            );
+
+            // 반자동 확인완료: 조건이 연속 AUTO_CONFIRM_HOLD_MS 유지되면 자동으로 1회 저장.
+            if (stableSinceRef.current === 0) stableSinceRef.current = t1;
+            if (
+              !autoSavedRef.current &&
+              t1 - stableSinceRef.current >= AGGREGATE.AUTO_CONFIRM_HOLD_MS
+            ) {
+              autoSavedRef.current = true; // 가드: 같은 측정에서 중복 저장 금지
+              setConfirmed(true);
+              setSaving(true);
+              setSaveMsg("측정 확인 — 자동 저장 중…");
+              saveScan(a.metrics, medLm)
+                .then(() => setSaveMsg("확인완료 ✓ 자동 저장됨"))
+                .catch((e) => setSaveMsg("저장 실패: " + errMsg(e)))
+                .finally(() => setSaving(false));
+            }
+          } else {
+            setAssess(null); // 미통과 → 추천 산출 안 함
+            // 조건 깨짐 → 안정 타이머·자동저장 가드 리셋(다시 자세 잡으면 재확인 가능)
+            stableSinceRef.current = 0;
+            autoSavedRef.current = false;
+            setConfirmed(false);
+          }
         }
         for (const landmarks of result.landmarks) {
           drawingUtils.drawConnectors(
@@ -229,7 +289,7 @@ export default function PoseCamera() {
       await saveScan(metrics, lastLandmarksRef.current ?? []);
       setSaveMsg("저장됨 ✓");
     } catch (e) {
-      setSaveMsg("저장 실패: " + (e instanceof Error ? e.message : String(e)));
+      setSaveMsg("저장 실패: " + errMsg(e));
     } finally {
       setSaving(false);
     }
@@ -298,6 +358,31 @@ export default function PoseCamera() {
             </div>
           </div>
 
+          {agg && (
+            <div className="mt-2 font-mono text-xs">
+              <span
+                className={
+                  agg.gatePassed && agg.confidence >= AGGREGATE.MIN_CONFIDENCE
+                    ? "text-lime-600"
+                    : "text-amber-600"
+                }
+              >
+                측정 신뢰도 {Math.round(agg.confidence * 100)}% · {agg.framesUsed}프레임
+              </span>
+            </div>
+          )}
+          {agg && !(agg.gatePassed && agg.confidence >= AGGREGATE.MIN_CONFIDENCE) && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+              정확한 측정을 위해 전신이 정면으로 또렷이 보이도록 거리를 맞춰 다시 서주세요. 신뢰도가
+              충분해질 때까지 추천을 보류합니다.
+            </p>
+          )}
+          {confirmed && (
+            <p className="mt-2 rounded-lg bg-lime-50 px-3 py-2 text-xs font-medium text-lime-800 dark:bg-lime-950 dark:text-lime-300">
+              ✓ 측정 확인완료 — 자세가 안정적으로 잡혀 자동으로 저장했습니다.
+            </p>
+          )}
+
           <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-lg bg-zinc-100 p-3 dark:bg-zinc-800">
               <div className="flex justify-between">
@@ -335,14 +420,22 @@ export default function PoseCamera() {
 
           {assess && assess.exerciseIds.length > 0 && (
             <div className="mt-3">
-              <span className="text-xs text-zinc-500">추천 교정운동</span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-zinc-500">추천 교정운동</span>
+                <Link
+                  href={`/coach?plan=${assess.exerciseIds.join(",")}`}
+                  className="rounded-full bg-foreground px-3 py-1 text-xs font-medium text-background hover:opacity-90"
+                >
+                  추천 코스 시작 ({assess.exerciseIds.length}) →
+                </Link>
+              </div>
               <div className="mt-1 flex flex-wrap gap-2">
                 {assess.exerciseIds.map((id) => {
                   const ex = exerciseById(id);
                   return ex ? (
                     <Link
                       key={id}
-                      href="/coach"
+                      href={`/coach?ex=${id}`}
                       className="rounded-full border border-zinc-300 px-3 py-1 text-xs text-zinc-700 hover:border-zinc-500 dark:border-zinc-700 dark:text-zinc-200"
                     >
                       {ex.emoji} {ex.name}
@@ -382,7 +475,7 @@ export default function PoseCamera() {
                 disabled={saving}
                 className="rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 disabled:opacity-50"
               >
-                {saving ? "저장 중…" : "이 측정 저장"}
+                {saving ? "저장 중…" : confirmed ? "다시 저장" : "이 측정 저장"}
               </button>
             </div>
           </div>

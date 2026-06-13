@@ -12,6 +12,12 @@ export type BodyMetrics = {
     shoulderTiltDeg: number;
     hipTiltDeg: number;
     headTiltDeg: number;
+    // 부호 포함 기울기(크기는 위 *Deg와 동일). 부호 규약 = lowerSideNote 와 동일:
+    //   + = 왼쪽이 낮음(left.y > right.y), − = 오른쪽이 낮음. 미가용 시 0.
+    // 기존 점수·필드 불변, 방향 판정(detectPostureIssues)용으로 "가산"만 한 필드.
+    shoulderTiltSigned: number;
+    hipTiltSigned: number;
+    headTiltSigned: number;
   };
   golden: {
     available: boolean;
@@ -62,6 +68,13 @@ function gradeOf(score: number): "A" | "B" | "C" | "D" {
 function lowerSideNote(label: string, left: Pt, right: Pt, deg: number): string {
   const side = left.y > right.y ? "왼쪽" : "오른쪽";
   return `${label} 기울기 ${round1(deg)}° (${side}이 낮음)`;
+}
+
+// 부호 포함 기울기. lowerSideNote 와 동일 규약: 왼쪽이 낮으면(+), 오른쪽이 낮으면(−).
+// 크기는 lineTiltDeg(=*Deg)와 동일.
+function signedTilt(deg: number, left: Pt, right: Pt): number {
+  const v = round1(deg * (left.y > right.y ? 1 : -1));
+  return v === 0 ? 0 : v; // -0 정규화
 }
 
 export function computeBodyMetrics(lm: Pt[]): BodyMetrics {
@@ -138,6 +151,9 @@ export function computeBodyMetrics(lm: Pt[]): BodyMetrics {
       shoulderTiltDeg: round1(shoulderTiltDeg),
       hipTiltDeg: round1(hipTiltDeg),
       headTiltDeg: round1(headTiltDeg),
+      shoulderTiltSigned: shOk ? signedTilt(shoulderTiltDeg, lSh!, rSh!) : 0,
+      hipTiltSigned: hipOk ? signedTilt(hipTiltDeg, lHip!, rHip!) : 0,
+      headTiltSigned: headOk ? signedTilt(headTiltDeg, lEar!, rEar!) : 0,
     },
     golden: {
       available: goldenOk,

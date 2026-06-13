@@ -36,6 +36,24 @@ export const GOLDEN = {
   GRADE: { A: 85, B: 70, C: 55 },
 } as const;
 
+// ── 프레임 품질 게이트(frameQuality.ts) ── 단일 출처 상수. 매직넘버 금지.
+export const QUALITY = {
+  VIS_MIN: 0.5, // 랜드마크 신뢰 최소 visibility (이 미만 = 저신뢰)
+  MAX_LOW_VIS_RATIO: 0.5, // 추적 랜드마크 중 저신뢰 비율이 이 값 초과면 프레임 제외
+} as const;
+
+// ── 다중 프레임 집계/게이팅(aggregate.ts) ── 단일 출처 상수.
+export const AGGREGATE = {
+  WINDOW: 24, // PoseCamera 롤링 버퍼 최대 프레임 수
+  MIN_FRAMES: 8, // 게이트 통과 프레임이 이 미만이면 gatePassed=false
+  FRONTAL_SYMMETRY_MIN: 0.8, // 정면도(yaw) 게이트: 좌/우 체간 길이 대칭비 min(L,R)/max(L,R) ≥
+  TORSO_H_MIN: 0.12, // 거리 게이트: 정규화 체간높이(어깨~골반 y) 하한(너무 멂)
+  TORSO_H_MAX: 0.55, // 거리 게이트: 상한(너무 가까움)
+  CV_FULL_PENALTY: 0.15, // overall 점수 변동계수가 이 값이면 안정성 0(이하면 비례 가점)
+  MIN_CONFIDENCE: 0.5, // 진단/추천 산출 허용 최소 confidence (미만이면 보류)
+  AUTO_CONFIRM_HOLD_MS: 1500, // 게이트+신뢰도 조건이 이만큼 연속 유지되면 자동 확인완료·1회 자동저장(반자동)
+} as const;
+
 // 자세편차 → 추천/판정 임계값 단일 출처(도). 기존 recommend 매직넘버(5/4)도 여기로 통합.
 export const POSTURE = {
   HEAD_TILT_DEG: 5, // 머리 좌우 기울기 ≥ → 목 옆 스트레칭
