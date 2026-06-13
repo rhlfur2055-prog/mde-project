@@ -1,6 +1,9 @@
 # 환경변수 — API 키 (절대 커밋 금지)
 .env
 
+# MCP 설정 — Supabase 액세스 토큰 포함(절대 커밋 금지). 템플릿은 .mcp.json.example
+.mcp.json
+
 # Python
 __pycache__/
 *.pyc

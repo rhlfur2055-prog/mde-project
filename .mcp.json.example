@@ -1,0 +1,19 @@
+{
+  "_README": "이 파일을 .mcp.json 으로 복사하고 PASTE_YOUR_SUPABASE_ACCESS_TOKEN 자리에 Personal Access Token(sbp_...)을 넣으세요. 토큰 발급: https://supabase.com/dashboard/account/tokens . 실제 .mcp.json 은 gitignore 됩니다(커밋 금지). 토큰 교체 후 Claude Code 재시작 → MCP 서버 승인.",
+  "mcpServers": {
+    "supabase": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--project-ref=nagtdjqzaxdpshdcfgsl",
+        "--features=database,docs"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "PASTE_YOUR_SUPABASE_ACCESS_TOKEN"
+      }
+    }
+  }
+}
