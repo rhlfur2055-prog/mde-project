@@ -23,6 +23,7 @@ export default function ExerciseDemo({
   useEffect(() => {
     startRef.current = 0;
     lastRef.current = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPose(poseAt(exerciseId, 0));
     const loop = (ts: number) => {
       if (!startRef.current) startRef.current = ts;

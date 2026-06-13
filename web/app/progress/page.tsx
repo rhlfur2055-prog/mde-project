@@ -37,6 +37,7 @@ export default function ProgressPage() {
   useEffect(() => {
     if (authLoading) return;
     if (!session) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus("ready"); // 비로그인 → 로그인 안내 표시(아래)
       return;
     }

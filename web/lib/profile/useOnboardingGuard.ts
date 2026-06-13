@@ -11,8 +11,8 @@ export function useOnboardingGuard(): boolean {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     // localStorage는 클라이언트 전용 → 마운트 후 확인이 정석(lazy 초기화는 hydration mismatch).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (hasProfile()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReady(true);
       return;
     }

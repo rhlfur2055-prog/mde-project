@@ -75,7 +75,9 @@ export default function PoseCamera() {
   // 로그인 세션 — 저장은 로그인 사용자만(계정 격리 RLS). 루프(stale 클로저)에서 ref로 읽음.
   const { session } = useSession();
   const sessionRef = useRef(session);
-  sessionRef.current = session;
+  useEffect(() => {
+    sessionRef.current = session;
+  });
 
   const stop = useCallback(() => {
     cancelAnimationFrame(rafRef.current);

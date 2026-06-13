@@ -33,7 +33,7 @@ export default function Demo3DPage() {
 
       <p className="max-w-md text-center text-xs text-zinc-400">
         ※ 데모용 샘플 모델(threejs MIT). 실제론 Mixamo 운동 캐릭터(남/여)로 교체 →
-        교정운동 동작 재생. "현실감" 가능성 확인용 proof입니다.
+        교정운동 동작 재생. &ldquo;현실감&rdquo; 가능성 확인용 proof입니다.
       </p>
     </div>
   );

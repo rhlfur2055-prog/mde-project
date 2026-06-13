@@ -54,7 +54,9 @@ export default function CoachCamera({
   const [inPos, setInPos] = useState(false); // 현재 목표 자세 충족 여부(게이지 색)
   const [cuesOn, setCuesOn] = useState(true); // 음성·사운드·진동 큐
   const cuesOnRef = useRef(true);
-  cuesOnRef.current = cuesOn; // 루프(stale 클로저)에서 최신 토글 읽기
+  useEffect(() => {
+    cuesOnRef.current = cuesOn; // 루프(stale 클로저)에서 최신 토글 읽기
+  });
   const [nextCountdown, setNextCountdown] = useState<number | null>(null); // 다음 운동 자동 전환 카운트다운(초)
 
   const resetProgress = useCallback(() => {
@@ -240,7 +242,9 @@ export default function CoachCamera({
   // 코스 연속 진행: 다음 운동으로 넘어오면(autoStart) 카메라 자동 시작 — 사람이 매번 '시작' 안 누르게.
   // 최초 진입은 사용자 제스처(첫 '시작')로 권한 받으므로 autoStart는 2번째 운동부터만 true.
   const startRef = useRef(start);
-  startRef.current = start;
+  useEffect(() => {
+    startRef.current = start;
+  });
   useEffect(() => {
     if (autoStart) startRef.current();
     // 마운트 1회만 — 의존성 비움(exercise 바뀌면 key로 remount되어 재실행).
