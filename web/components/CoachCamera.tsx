@@ -30,6 +30,7 @@ export default function CoachCamera({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const runtimeRef = useRef<PoseRuntime | null>(null);
   const rafRef = useRef<number>(0);
+  const loopRef = useRef<() => void>(() => {}); // rAF 재귀 — 자기참조 대신 ref로 호출(stale 방지)
   const streamRef = useRef<MediaStream | null>(null);
   const lastVideoTimeRef = useRef<number>(-1);
   const lastTsRef = useRef<number>(0);
@@ -184,8 +185,11 @@ export default function CoachCamera({
         }
       }
     }
-    rafRef.current = requestAnimationFrame(loop);
+    rafRef.current = requestAnimationFrame(() => loopRef.current());
   }, [exercise]);
+  useEffect(() => {
+    loopRef.current = loop;
+  }, [loop]);
 
   const start = useCallback(async () => {
     try {
@@ -216,7 +220,7 @@ export default function CoachCamera({
       setError(e instanceof Error ? e.message : String(e));
       setStatus("error");
     }
-  }, [loop, resetProgress]);
+  }, [loop, resetProgress, exercise.instructions]);
 
   useEffect(() => stop, [stop]);
 

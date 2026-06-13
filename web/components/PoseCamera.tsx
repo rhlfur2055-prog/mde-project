@@ -43,6 +43,7 @@ export default function PoseCamera() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const runtimeRef = useRef<PoseRuntime | null>(null);
   const rafRef = useRef<number>(0);
+  const loopRef = useRef<() => void>(() => {}); // rAF 재귀 — 자기참조 대신 ref로 호출(stale 방지)
   const streamRef = useRef<MediaStream | null>(null);
   const lastVideoTimeRef = useRef<number>(-1);
   const fpsRef = useRef<{ last: number; frames: number }>({ last: 0, frames: 0 });
@@ -249,8 +250,11 @@ export default function PoseCamera() {
         }
       }
     }
-    rafRef.current = requestAnimationFrame(loop);
+    rafRef.current = requestAnimationFrame(() => loopRef.current());
   }, []);
+  useEffect(() => {
+    loopRef.current = loop;
+  }, [loop]);
 
   const start = useCallback(async () => {
     try {
