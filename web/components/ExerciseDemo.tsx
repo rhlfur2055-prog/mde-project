@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { DEMO_CONNECTIONS, poseAt } from "@/lib/exercise/demos";
+import { poseAt, type DemoPose, type Joint } from "@/lib/exercise/demos";
 
 export type Gender = "man" | "woman";
 
-// 운동 시범 — 3단 폴백:
-//  ① public/exercises/{id}-{gender}.mp4 (영상, 표본)
-//  ② .gif (GIF)
-//  ③ 우리 마네킹 캐릭터(코드, 무료)
+// 운동 시범 — 외부 영상/이미지 없이 코드로 그리는 SVG 맨몸 피겨.
+// lib/exercise/demos.ts 의 키프레임을 보간(poseAt)해 운동별 동작을 반복 재생한다.
+// (이전 mp4/gif 폴백 제거 — 모든 운동을 일관된 SVG로, 항상 동작이 정확히 맞게.)
 export default function ExerciseDemo({
   exerciseId,
   gender = "man",
@@ -16,128 +15,105 @@ export default function ExerciseDemo({
   exerciseId: string;
   gender?: Gender;
 }) {
-  // 네가 둔 형식 그대로: exercises/{운동}/{운동}-{man|woman}.mp4
-  const base = `/exercises/${exerciseId}/${exerciseId}-${gender}`;
-  const [tier, setTier] = useState<"video" | "gif" | "avatar">("video");
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [pose, setPose] = useState<DemoPose | null>(() => poseAt(exerciseId, 0));
   const rafRef = useRef<number>(0);
   const startRef = useRef<number>(0);
+  const lastRef = useRef<number>(0);
 
-  // 운동/성별 바뀌면 영상부터 다시 시도
   useEffect(() => {
-    setTier("video");
-  }, [exerciseId, gender]);
-
-  // 마네킹(폴백) — tier가 avatar일 때만 그림
-  useEffect(() => {
-    if (tier !== "avatar") return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
     startRef.current = 0;
-    const draw = (ts: number) => {
+    lastRef.current = 0;
+    setPose(poseAt(exerciseId, 0));
+    const loop = (ts: number) => {
       if (!startRef.current) startRef.current = ts;
-      const p = poseAt(exerciseId, ts - startRef.current);
-      const { width: w, height: h } = canvas;
-      ctx.clearRect(0, 0, w, h);
-      if (p) {
-        const X = (v: number) => v * w;
-        const Y = (v: number) => v * h;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        const body = ctx.createLinearGradient(0, 0, 0, h);
-        body.addColorStop(0, "#b8c2d4");
-        body.addColorStop(1, "#5b6b85");
-        const ARM = w * 0.055;
-        const LEG = w * 0.07;
-        const stroke = (a: typeof p.head, b: typeof p.head, lw: number) => {
-          ctx.strokeStyle = body;
-          ctx.lineWidth = lw;
-          ctx.beginPath();
-          ctx.moveTo(X(a[0]), Y(a[1]));
-          ctx.lineTo(X(b[0]), Y(b[1]));
-          ctx.stroke();
-        };
-        ctx.fillStyle = body;
-        ctx.beginPath();
-        ctx.moveTo(X(p.lSh[0]), Y(p.lSh[1]));
-        ctx.lineTo(X(p.rSh[0]), Y(p.rSh[1]));
-        ctx.lineTo(X(p.rHip[0]), Y(p.rHip[1]));
-        ctx.lineTo(X(p.lHip[0]), Y(p.lHip[1]));
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = body;
-        ctx.lineWidth = w * 0.05;
-        ctx.stroke();
-        stroke(p.lHip, p.lKn, LEG);
-        stroke(p.lKn, p.lAnk, LEG * 0.85);
-        stroke(p.rHip, p.rKn, LEG);
-        stroke(p.rKn, p.rAnk, LEG * 0.85);
-        stroke(p.lSh, p.lEl, ARM);
-        stroke(p.lEl, p.lWr, ARM * 0.85);
-        stroke(p.rSh, p.rEl, ARM);
-        stroke(p.rEl, p.rWr, ARM * 0.85);
-        const neck: [number, number] = [
-          (p.lSh[0] + p.rSh[0]) / 2,
-          (p.lSh[1] + p.rSh[1]) / 2,
-        ];
-        stroke(neck, p.head, w * 0.045);
-        ctx.fillStyle = body;
-        ctx.beginPath();
-        ctx.arc(X(p.head[0]), Y(p.head[1]), w * 0.08, 0, Math.PI * 2);
-        ctx.fill();
-        for (const k of ["lWr", "rWr", "lAnk", "rAnk"] as const) {
-          ctx.beginPath();
-          ctx.arc(X(p[k][0]), Y(p[k][1]), ARM * 0.45, 0, Math.PI * 2);
-          ctx.fill();
-        }
+      if (ts - lastRef.current >= 33) {
+        // ~30fps
+        lastRef.current = ts;
+        setPose(poseAt(exerciseId, ts - startRef.current));
       }
-      rafRef.current = requestAnimationFrame(draw);
+      rafRef.current = requestAnimationFrame(loop);
     };
-    rafRef.current = requestAnimationFrame(draw);
+    rafRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [tier, exerciseId]);
+  }, [exerciseId]);
 
-  const cls = "h-[300px] w-[240px] rounded-lg bg-zinc-100 object-contain dark:bg-zinc-800";
+  const VB_W = 100;
+  const VB_H = 125;
+  const X = (v: number) => v * VB_W;
+  const Y = (v: number) => v * VB_H;
+  const cls = "h-[300px] w-[240px] rounded-lg bg-zinc-100 dark:bg-zinc-800";
 
-  if (tier === "video") {
-    // mp4 직접 재생(배경 박스 없이). 없으면 gif→마네킹으로 폴백.
+  if (!pose) {
     return (
-      <video
-        src={`${base}.mp4`}
-        autoPlay
-        loop
-        muted
-        playsInline
-        onLoadedMetadata={(e) => {
-          // 병원용 — 동작을 천천히 보여줌(0.6배)
-          e.currentTarget.playbackRate = 0.6;
-        }}
-        onError={() => setTier("gif")}
-        className="h-[300px] w-[240px] object-contain"
-      />
+      <div className={`${cls} flex items-center justify-center text-xs text-zinc-400`}>
+        시범 준비 중
+      </div>
     );
   }
-  if (tier === "gif") {
-    // eslint-disable-next-line @next/next/no-img-element
-    return (
-      <img
-        src={`${base}.gif`}
-        alt="운동 시범"
-        width={240}
-        height={300}
-        onError={() => setTier("avatar")}
-        className={cls}
-      />
-    );
-  }
-  return (
-    <canvas
-      ref={canvasRef}
-      width={240}
-      height={300}
-      className="rounded-lg bg-zinc-100 dark:bg-zinc-800"
+
+  // 성별로 색만 살짝 다르게(토글이 보이게) — 도식 피겨라 형태는 동일.
+  const bodyTop = gender === "woman" ? "#b48ec4" : "#8a98b4";
+  const bodyBot = gender === "woman" ? "#7d5e94" : "#5b6b85";
+  const ARM = 5.5;
+  const LEG = 7;
+  const neck: [number, number] = [(pose.lSh[0] + pose.rSh[0]) / 2, (pose.lSh[1] + pose.rSh[1]) / 2];
+
+  const limb = (a: [number, number], b: [number, number], w: number) => (
+    <line
+      x1={X(a[0])}
+      y1={Y(a[1])}
+      x2={X(b[0])}
+      y2={Y(b[1])}
+      stroke="url(#bodyGrad)"
+      strokeWidth={w}
+      strokeLinecap="round"
     />
+  );
+  const dot = (k: Joint, r: number) => (
+    <circle cx={X(pose[k][0])} cy={Y(pose[k][1])} r={r} fill="url(#bodyGrad)" />
+  );
+
+  return (
+    <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className={cls} role="img" aria-label="운동 시범">
+      <defs>
+        <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={bodyTop} />
+          <stop offset="1" stopColor={bodyBot} />
+        </linearGradient>
+      </defs>
+
+      {/* 다리 */}
+      {limb(pose.lHip, pose.lKn, LEG)}
+      {limb(pose.lKn, pose.lAnk, LEG * 0.85)}
+      {limb(pose.rHip, pose.rKn, LEG)}
+      {limb(pose.rKn, pose.rAnk, LEG * 0.85)}
+
+      {/* 몸통 */}
+      <polygon
+        points={`${X(pose.lSh[0])},${Y(pose.lSh[1])} ${X(pose.rSh[0])},${Y(pose.rSh[1])} ${X(
+          pose.rHip[0],
+        )},${Y(pose.rHip[1])} ${X(pose.lHip[0])},${Y(pose.lHip[1])}`}
+        fill="url(#bodyGrad)"
+        stroke="url(#bodyGrad)"
+        strokeWidth={5}
+        strokeLinejoin="round"
+      />
+
+      {/* 팔 */}
+      {limb(pose.lSh, pose.lEl, ARM)}
+      {limb(pose.lEl, pose.lWr, ARM * 0.85)}
+      {limb(pose.rSh, pose.rEl, ARM)}
+      {limb(pose.rEl, pose.rWr, ARM * 0.85)}
+
+      {/* 목 + 머리 */}
+      {limb(neck, pose.head, 4.5)}
+      <circle cx={X(pose.head[0])} cy={Y(pose.head[1])} r={8} fill="url(#bodyGrad)" />
+
+      {/* 손·발 */}
+      {dot("lWr", 2.6)}
+      {dot("rWr", 2.6)}
+      {dot("lAnk", 2.6)}
+      {dot("rAnk", 2.6)}
+    </svg>
   );
 }

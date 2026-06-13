@@ -1,15 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { EXERCISES, exerciseById } from "@/lib/exercise/exercises";
 import CoachCamera from "@/components/CoachCamera";
 import type { Gender } from "@/components/ExerciseDemo";
+import { useOnboardingGuard } from "@/lib/profile/useOnboardingGuard";
 
-export default function CoachPage() {
-  const [selected, setSelected] = useState<string | null>(null);
+// 측정 화면에서 넘어온 운동을 연다.
+//   /coach?plan=squat,scapular-retraction,chin-tuck → 추천 코스 연속 진행
+//   /coach?ex=squat                                  → 단일 운동
+function CoachInner() {
+  const ready = useOnboardingGuard(); // 온보딩 미완료 시 /onboarding 으로 강제 이동
+  const params = useSearchParams();
+  const [course, setCourse] = useState<string[]>(() => {
+    const plan = params.get("plan");
+    return plan ? plan.split(",").filter((id) => exerciseById(id)) : [];
+  }); // 측정 추천 코스(순서대로)
+  const [courseIdx, setCourseIdx] = useState(0);
+  const [selected, setSelected] = useState<string | null>(() => {
+    if (params.get("plan")) return null;
+    const ex = params.get("ex");
+    return ex && exerciseById(ex) ? ex : null;
+  }); // 목록에서 직접 고른 단일 운동
   const [gender, setGender] = useState<Gender>("man");
-  const ex = selected ? exerciseById(selected) : null;
+
+  const inCourse = course.length > 0;
+  const courseDone = inCourse && courseIdx >= course.length;
+  const currentId = inCourse ? course[courseIdx] : selected;
+  const ex = !courseDone && currentId ? exerciseById(currentId) : null;
+
+  const exitAll = () => {
+    setCourse([]);
+    setCourseIdx(0);
+    setSelected(null);
+  };
+
+  if (!ready) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 py-24 text-sm text-zinc-500">
+        <span>온보딩으로 이동 중…</span>
+        <Link href="/onboarding" className="text-lime-600 underline hover:opacity-80">
+          안 넘어가면 여기를 누르세요 →
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col items-center gap-6 bg-zinc-50 px-4 py-10 dark:bg-black">
@@ -47,8 +84,60 @@ export default function CoachPage() {
         </div>
       </header>
 
-      {ex ? (
-        <CoachCamera exercise={ex} gender={gender} onExit={() => setSelected(null)} />
+      {courseDone ? (
+        // 추천 코스 끝 — 다음 동선으로 유기적으로 이어줌
+        <div className="flex w-full max-w-2xl flex-col items-center gap-4 rounded-2xl border border-zinc-300 p-8 text-center dark:border-zinc-700">
+          <span className="text-4xl">🎉</span>
+          <h2 className="text-xl font-semibold text-black dark:text-zinc-50">
+            추천 코스 {course.length}개 완료!
+          </h2>
+          <p className="text-sm text-zinc-500">
+            오늘 자세 교정운동을 모두 마쳤어요. 진척을 기록하거나 다시 측정해 보세요.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+            <Link
+              href="/progress"
+              className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background hover:opacity-90"
+            >
+              진척 보기
+            </Link>
+            <Link
+              href="/capture"
+              className="rounded-full border border-zinc-300 px-5 py-2 text-sm text-zinc-700 hover:bg-black/4 dark:border-zinc-700 dark:text-zinc-200"
+            >
+              다시 측정
+            </Link>
+            <button
+              onClick={() => setCourseIdx(0)}
+              className="rounded-full border border-zinc-300 px-5 py-2 text-sm text-zinc-700 hover:bg-black/4 dark:border-zinc-700 dark:text-zinc-200"
+            >
+              코스 다시
+            </button>
+            <button
+              onClick={exitAll}
+              className="rounded-full border border-zinc-300 px-5 py-2 text-sm text-zinc-700 hover:bg-black/4 dark:border-zinc-700 dark:text-zinc-200"
+            >
+              운동 목록
+            </button>
+          </div>
+        </div>
+      ) : ex ? (
+        <CoachCamera
+          key={currentId ?? ex.id}
+          exercise={ex}
+          gender={gender}
+          onExit={exitAll}
+          courseLabel={inCourse ? `추천 코스 ${courseIdx + 1}/${course.length}` : undefined}
+          autoStart={inCourse && courseIdx > 0}
+          onNext={inCourse ? () => setCourseIdx((i) => i + 1) : undefined}
+          nextLabel={
+            inCourse
+              ? courseIdx < course.length - 1
+                ? `다음: ${exerciseById(course[courseIdx + 1])?.name ?? "운동"}`
+                : "코스 완료 🎉"
+              : undefined
+          }
+        />
       ) : (
         <ul className="grid w-full max-w-2xl gap-3 sm:grid-cols-2">
           {EXERCISES.map((e) => (
@@ -71,5 +160,13 @@ export default function CoachPage() {
         </ul>
       )}
     </div>
+  );
+}
+
+export default function CoachPage() {
+  return (
+    <Suspense fallback={null}>
+      <CoachInner />
+    </Suspense>
   );
 }
