@@ -6,6 +6,8 @@ import { listScans, type ScanRow } from "@/lib/supabase/scans";
 import { useSession, signInWithGoogle } from "@/lib/supabase/session";
 import AuthButton from "@/components/AuthButton";
 import TrendChart from "@/components/TrendChart";
+import ProLock from "@/components/ProLock";
+import { usePlan } from "@/lib/supabase/plan";
 
 function daysAgo(ts: string): number {
   return Math.max(0, Math.floor((Date.now() - new Date(ts).getTime()) / 86_400_000));
@@ -35,6 +37,7 @@ function ScoreBadge({ score, grade }: { score: number | null; grade: string | nu
 
 export default function ProgressPage() {
   const { session, loading: authLoading } = useSession();
+  const { plan } = usePlan(); // 추세 그래프는 Pro 전용(전/후 1회 비교는 무료).
   const [scans, setScans] = useState<ScanRow[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
@@ -139,7 +142,14 @@ export default function ProgressPage() {
 
         {status === "ready" && scans.length >= 2 && (
           <div className="mb-6">
-            <TrendChart scans={scans} />
+            {plan === "pro" ? (
+              <TrendChart scans={scans} />
+            ) : (
+              <ProLock
+                title="점수 추세 그래프"
+                desc="측정할수록 쌓이는 점수 변화를 한눈에. 전체 이력 추세는 Pro에서 열립니다."
+              />
+            )}
           </div>
         )}
 

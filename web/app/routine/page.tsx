@@ -10,6 +10,8 @@ import { detectPostureIssues } from "@/lib/program/detect";
 import { buildRoutine } from "@/lib/program/engine";
 import type { ExercisePrescription, Routine, Side } from "@/lib/program/types";
 import { exerciseById } from "@/lib/exercise/exercises";
+import { usePlan } from "@/lib/supabase/plan";
+import ProLock from "@/components/ProLock";
 
 function daysAgo(iso: string): number {
   const diff = Date.now() - new Date(iso).getTime();
@@ -96,6 +98,7 @@ type LoadState = { takenAt: string | null; routine: Routine | null; done: boolea
 function RoutineView() {
   // localStorage 는 클라이언트 전용 → 마운트 후 1회 로드(SSR/하이드레이션 안전).
   const [state, setState] = useState<LoadState | null>(null);
+  const { plan } = usePlan(); // 루틴 상세는 Pro 전용. loading 중에도 free 취급(Pro 콘텐츠 플래시 방지).
 
   useEffect(() => {
     const snap = getLastScan();
@@ -200,7 +203,12 @@ function RoutineView() {
         </div>
       )}
 
-      {hasRoutine ? (
+      {!hasRoutine ? (
+        <p className="w-full rounded-xl border border-zinc-300 px-4 py-6 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+          이번 측정에서는 처방할 교정운동이 잡히지 않았어요. 아래 안내를 확인하거나 측면/전신이
+          또렷하게 보이도록 다시 측정해 보세요.
+        </p>
+      ) : plan === "pro" ? (
         <>
           <div className="flex w-full flex-col gap-6">
             <RoutineGroup title="아침 · 근력·활성" emoji="🌅" items={morning} />
@@ -227,10 +235,22 @@ function RoutineView() {
           </div>
         </>
       ) : (
-        <p className="w-full rounded-xl border border-zinc-300 px-4 py-6 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
-          이번 측정에서는 처방할 교정운동이 잡히지 않았어요. 아래 안내를 확인하거나 측면/전신이
-          또렷하게 보이도록 다시 측정해 보세요.
-        </p>
+        // 무료 → 티저(처방 개수만 공개) + Pro 잠금. 실제 처방·세트/렙은 가린다.
+        <div className="flex w-full flex-col gap-3">
+          <div className="w-full rounded-xl border border-zinc-300 px-4 py-5 text-center dark:border-zinc-700">
+            <p className="text-sm text-zinc-700 dark:text-zinc-200">
+              측정 결과로 <b className="text-lime-600">맞춤 교정운동 {planIds.length}개</b>가
+              준비됐어요.
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              아침/저녁 처방(세트·횟수)과 따라하기 코칭은 Pro에서 열립니다.
+            </p>
+          </div>
+          <ProLock
+            title="개인화 교정 루틴"
+            desc="네 약점에 맞춘 아침·저녁 처방과 단계별 따라하기 코칭을 받아보세요."
+          />
+        </div>
       )}
 
       {routine.advisories.length > 0 && (
