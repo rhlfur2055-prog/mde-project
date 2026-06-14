@@ -23,6 +23,7 @@ import {
 import { AGGREGATE } from "@/lib/golden/poseConfig";
 import { assessPosture, exerciseById } from "@/lib/exercise/exercises";
 import { saveScan } from "@/lib/supabase/scans";
+import { saveLastScan } from "@/lib/program/store";
 import { useSession, signInWithGoogle } from "@/lib/supabase/session";
 import Link from "next/link";
 
@@ -174,6 +175,8 @@ export default function PoseCamera() {
             ) {
               autoSavedRef.current = true; // 가드: 같은 측정에서 중복 저장 금지
               setConfirmed(true);
+              // "오늘의 루틴" 입력용 스냅샷(온디바이스) — 로그인 무관, 게이트 통과 측정만.
+              saveLastScan(a, new Date().toISOString());
               if (sessionRef.current) {
                 // 로그인 사용자 → 계정에 저장(RLS: user_id=auth.uid())
                 setSaving(true);
@@ -310,13 +313,14 @@ export default function PoseCamera() {
       setSaving(true);
       setSaveMsg("");
       await saveScan(metrics, lastLandmarksRef.current ?? []);
+      if (agg) saveLastScan(agg, new Date().toISOString()); // 루틴 입력 스냅샷 동기화
       setSaveMsg("저장됨 ✓");
     } catch (e) {
       setSaveMsg("저장 실패: " + errMsg(e));
     } finally {
       setSaving(false);
     }
-  }, [metrics, session]);
+  }, [metrics, session, agg]);
 
   // 언마운트 시 정리
   useEffect(() => stop, [stop]);
@@ -482,10 +486,10 @@ export default function PoseCamera() {
             <span className="text-xs text-zinc-500">{saveMsg}</span>
             <div className="flex gap-2">
               <Link
-                href="/coach"
+                href="/routine"
                 className="rounded-full border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-black/4 dark:border-zinc-700 dark:text-zinc-200"
               >
-                교정운동
+                오늘의 루틴
               </Link>
               <Link
                 href="/progress"
