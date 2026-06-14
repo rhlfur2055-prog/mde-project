@@ -5,6 +5,11 @@ import Link from "next/link";
 import { listScans, type ScanRow } from "@/lib/supabase/scans";
 import { useSession, signInWithGoogle } from "@/lib/supabase/session";
 import AuthButton from "@/components/AuthButton";
+import TrendChart from "@/components/TrendChart";
+
+function daysAgo(ts: string): number {
+  return Math.max(0, Math.floor((Date.now() - new Date(ts).getTime()) / 86_400_000));
+}
 
 function fmt(ts: string): string {
   const d = new Date(ts);
@@ -119,6 +124,23 @@ export default function ProgressPage() {
               측정하러 가기
             </Link>
           </p>
+        )}
+
+        {status === "ready" && scans.length >= 1 && (
+          <div className="mb-4 flex items-center justify-between rounded-lg bg-zinc-100 px-4 py-2 text-xs text-zinc-500 dark:bg-zinc-800">
+            <span>
+              마지막 측정 {daysAgo(scans[0].taken_at) === 0 ? "오늘" : `${daysAgo(scans[0].taken_at)}일 전`}
+            </span>
+            <Link href="/routine" className="font-medium text-lime-600 underline">
+              오늘의 루틴 →
+            </Link>
+          </div>
+        )}
+
+        {status === "ready" && scans.length >= 2 && (
+          <div className="mb-6">
+            <TrendChart scans={scans} />
+          </div>
         )}
 
         {showCompare && (
